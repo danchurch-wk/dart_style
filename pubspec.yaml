@@ -28,5 +28,5 @@ dev_dependencies:
   yaml: ^2.0.0
 
 executables:
-  dartfmt: format
+  dartfmt2: format
   dartformat: format # Allow the old name for compatibility.

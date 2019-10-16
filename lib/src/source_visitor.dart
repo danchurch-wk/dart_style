@@ -7,6 +7,7 @@ library dart_style.src.source_visitor;
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/src/generated/source.dart';
 
 import 'argument_list_visitor.dart';
@@ -1744,28 +1745,71 @@ class SourceVisitor extends ThrowingAstVisitor {
   visitImplementsClause(ImplementsClause node) {
     _visitCombinator(node.implementsKeyword, node.interfaces);
   }
-
+bool _didWrite = false;
   visitImportDirective(ImportDirective node) {
-    _visitDirectiveMetadata(node);
-    _simpleStatement(node, () {
-      token(node.keyword);
-      space();
-      visit(node.uri);
+    if (_didWrite) return;
 
-      _visitConfigurations(node.configurations);
+    final imports = node.parent.childEntities.whereType<ImportDirective>().toSet();
 
-      if (node.asKeyword != null) {
-        soloSplit();
-        token(node.deferredKeyword, after: space);
-        token(node.asKeyword);
-        space();
-        visit(node.prefix);
+    final testOnImports = imports.where((ce) => ce.toString().startsWith('@TestOn')).toSet();
+
+    final splitTestOnImportList = testOnImports.map((ce) => ce.toString().split(') ')).toList();
+
+    String testOnString = '';
+    String testOnImport;
+    if (splitTestOnImportList.isNotEmpty) {
+      testOnImport = '${splitTestOnImportList.first.first}) ${splitTestOnImportList.first[1]}';
+      builder.write(testOnString = '${splitTestOnImportList.first.first}) ');
+      twoNewlines();
+    }
+
+    final dartImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'dart:')).toSet();
+    final packageImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'package:w_sox')).toSet();
+    final relativeImports = imports.difference(dartImports).where((ce) => !ce.toString().replaceAll(testOnString, '').startsWith('import \'package:')).toSet();
+    final otherImports = imports.difference(dartImports).difference(packageImports).difference(relativeImports);
+
+    final writeFunc = (_ce) {
+      ImportDirective ce = _ce as ImportDirective;
+
+      if (ce.toString() != testOnImport) {
+        _visitDirectiveMetadata(ce);
       }
 
-      builder.startRule(CombinatorRule());
-      visitNodes(node.combinators);
-      builder.endRule();
-    });
+      _simpleStatement(ce, () {
+        token(ce.keyword);
+        space();
+        visit(ce.uri);
+
+        _visitConfigurations(ce.configurations);
+
+        if (ce.asKeyword != null) {
+          soloSplit();
+          token(ce.deferredKeyword, after: space);
+          token(ce.asKeyword);
+          space();
+          visit(ce.prefix);
+        }
+
+        builder.startRule(CombinatorRule());
+        visitNodes(ce.combinators);
+        builder.endRule();
+      });
+
+      newline();
+    };
+
+    final sortFunc = (c1, c2) => c1.toString().replaceAll(testOnString, '').compareTo(c2.toString().replaceAll(testOnString, ''));
+
+    dartImports.toList()..sort(sortFunc)..forEach(writeFunc);
+    twoNewlines();
+    otherImports.toList()..sort(sortFunc)..forEach(writeFunc);
+    twoNewlines();
+    packageImports.toList()..sort(sortFunc)..forEach(writeFunc);
+    twoNewlines();
+    relativeImports.toList()..sort(sortFunc)..forEach(writeFunc);
+    twoNewlines();
+
+    _didWrite = true;
   }
 
   visitIndexExpression(IndexExpression node) {
@@ -1860,7 +1904,15 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   visitInterpolationString(InterpolationString node) {
-    _writeStringLiteral(node.contents);
+    StringInterpolation parent = node.parent;
+
+    String newQuote = parent.isMultiline ? "'''" : "'";
+
+    bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted && parent.elements.whereType<InterpolationString>().any((element) {
+      return !element.contents.lexeme.contains(newQuote);
+    });
+
+    _writeStringLiteral(node.contents, shouldReplaceDoubleQuotes: false);
   }
 
   visitIsExpression(IsExpression node) {
@@ -2182,7 +2234,11 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   visitSimpleStringLiteral(SimpleStringLiteral node) {
-    _writeStringLiteral(node.literal);
+    String newQuote = node.isMultiline ? "'''" : "'";
+
+    bool shouldReplaceDoubleQuotes = !node.isSingleQuoted && !node.literal.lexeme.contains(newQuote);
+
+    _writeStringLiteral(node.literal, shouldReplaceDoubleQuotes: false);
   }
 
   visitSpreadElement(SpreadElement node) {
@@ -3245,7 +3301,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// Splits multiline strings into separate chunks so that the line splitter
   /// can handle them correctly.
-  void _writeStringLiteral(Token string) {
+  void _writeStringLiteral(Token string, {bool shouldReplaceDoubleQuotes = false}) {
     // Since we output the string literal manually, ensure any preceding
     // comments are written first.
     writePrecedingCommentsAndNewlines(string);
@@ -3254,13 +3310,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     var lines = string.lexeme.split(_formatter.lineEnding);
     var offset = string.offset;
 
-    _writeText(lines.first, offset);
+    _writeText(shouldReplaceDoubleQuotes ? lines.first.replaceAll('"', "'") : lines.first, offset);
     offset += lines.first.length;
 
     for (var line in lines.skip(1)) {
       builder.writeWhitespace(Whitespace.newlineFlushLeft);
       offset++;
-      _writeText(line, offset);
+      _writeText(shouldReplaceDoubleQuotes ? line.replaceAll('"', "'") : line, offset);
       offset += line.length;
     }
   }

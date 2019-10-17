@@ -591,7 +591,21 @@ class SourceVisitor extends ThrowingAstVisitor {
       builder.endRule();
     }
 
-    visitNodes(node.cascadeSections, between: zeroSplit);
+    if (_formatter.fixes.contains(StyleFix.sortProps)) {
+      Set<AstNode> propertyCascades = Set<AstNode>.from(node.cascadeSections.whereType<AssignmentExpression>());
+
+      visitNodes(
+        [
+          // Sort property assignments first, sorted
+          ...propertyCascades.toList()..sort((a, b) => '$a'.compareTo('$b')),
+          // Put anything else after (mostly method calls?) and DO NOT SORT
+          ...node.cascadeSections.toSet().difference(propertyCascades),
+        ],
+        between: zeroSplit,
+      );
+    } else {
+      visitNodes(node.cascadeSections, between: zeroSplit);
+    }
 
     if (splitIfOperandsSplit) {
       builder.endRule();
@@ -1745,9 +1759,18 @@ class SourceVisitor extends ThrowingAstVisitor {
   visitImplementsClause(ImplementsClause node) {
     _visitCombinator(node.implementsKeyword, node.interfaces);
   }
-bool _didWrite = false;
+
   visitImportDirective(ImportDirective node) {
-    if (_didWrite) return;
+    if (_formatter.fixes.contains(StyleFix.sortImports)) {
+      return _visitSortedImportDirectives(node);
+    }
+
+    _visitUnsortedImportDirective(node);
+  }
+
+  bool _didVisitImport = false;
+  void _visitSortedImportDirectives(ImportDirective node) {
+    if (_didVisitImport) return;
 
     final imports = node.parent.childEntities.whereType<ImportDirective>().toSet();
 
@@ -1758,7 +1781,7 @@ bool _didWrite = false;
     String testOnString = '';
     String testOnImport;
     if (splitTestOnImportList.isNotEmpty) {
-      testOnImport = '${splitTestOnImportList.first.first}) ${splitTestOnImportList.first[1]}';
+      testOnImport = '${splitTestOnImportList.first.first}) ${splitTestOnImportList.first.last}';
       builder.write(testOnString = '${splitTestOnImportList.first.first}) ');
       twoNewlines();
     }
@@ -1809,7 +1832,30 @@ bool _didWrite = false;
     relativeImports.toList()..sort(sortFunc)..forEach(writeFunc);
     twoNewlines();
 
-    _didWrite = true;
+    _didVisitImport = true;
+  }
+
+  void _visitUnsortedImportDirective(ImportDirective node) {
+    _visitDirectiveMetadata(node);
+    _simpleStatement(node, () {
+      token(node.keyword);
+      space();
+      visit(node.uri);
+
+      _visitConfigurations(node.configurations);
+
+      if (node.asKeyword != null) {
+        soloSplit();
+        token(node.deferredKeyword, after: space);
+        token(node.asKeyword);
+        space();
+        visit(node.prefix);
+      }
+
+      builder.startRule(CombinatorRule());
+      visitNodes(node.combinators);
+      builder.endRule();
+    });
   }
 
   visitIndexExpression(IndexExpression node) {
@@ -1912,7 +1958,10 @@ bool _didWrite = false;
       return !element.contents.lexeme.contains(newQuote);
     });
 
-    _writeStringLiteral(node.contents, shouldReplaceDoubleQuotes: false);
+    _writeStringLiteral(
+      node.contents,
+      shouldReplaceDoubleQuotes: _formatter.fixes.contains(StyleFix.preferSingleQuotes) && shouldReplaceDoubleQuotes,
+    );
   }
 
   visitIsExpression(IsExpression node) {
@@ -2238,7 +2287,10 @@ bool _didWrite = false;
 
     bool shouldReplaceDoubleQuotes = !node.isSingleQuoted && !node.literal.lexeme.contains(newQuote);
 
-    _writeStringLiteral(node.literal, shouldReplaceDoubleQuotes: false);
+    _writeStringLiteral(
+      node.literal,
+      shouldReplaceDoubleQuotes: _formatter.fixes.contains(StyleFix.preferSingleQuotes) && shouldReplaceDoubleQuotes,
+    );
   }
 
   visitSpreadElement(SpreadElement node) {

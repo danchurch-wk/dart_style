@@ -23,6 +23,7 @@ class StyleFix {
 
   static const preferSingleQuotes = StyleFix._('prefer-single-quotes', 'Replaces "s with \'s');
   static const sortImports = StyleFix._('sort-imports', 'Sort imports');
+  static const sortProps = StyleFix._('sort-props', 'Sort props');
 
   static const all = [
     docComments,
@@ -32,6 +33,7 @@ class StyleFix {
     optionalNew,
     preferSingleQuotes,
     sortImports,
+    sortProps,
   ];
 
   final String name;

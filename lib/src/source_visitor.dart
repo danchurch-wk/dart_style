@@ -593,12 +593,13 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     if (_formatter.fixes.contains(StyleFix.sortProps)) {
       visitNodes(
-        node.cascadeSections.toList()..sort((a, b) {
-          // Don't sort method invocations, only properties
-          if ([a, b].whereType<MethodInvocation>().isNotEmpty) return 0;
+        node.cascadeSections.toList()
+          ..sort((a, b) {
+            // Don't sort method invocations, only properties
+            if ([a, b].whereType<MethodInvocation>().isNotEmpty) return 0;
 
-          return '$a'.compareTo('$b');
-        }),
+            return '$a'.compareTo('$b');
+          }),
         between: zeroSplit,
       );
     } else {
@@ -1770,24 +1771,47 @@ class SourceVisitor extends ThrowingAstVisitor {
   void _visitSortedImportDirectives(ImportDirective node) {
     if (_didVisitImport) return;
 
-    final imports = node.parent.childEntities.whereType<ImportDirective>().toSet();
+    final imports =
+        node.parent.childEntities.whereType<ImportDirective>().toSet();
 
-    final testOnImports = imports.where((ce) => ce.toString().startsWith('@TestOn')).toSet();
+    final testOnImports =
+        imports.where((ce) => ce.toString().startsWith('@TestOn')).toSet();
 
-    final splitTestOnImportList = testOnImports.map((ce) => ce.toString().split(') ')).toList();
+    final splitTestOnImportList =
+        testOnImports.map((ce) => ce.toString().split(') ')).toList();
 
     String testOnString = '';
     String testOnImport;
     if (splitTestOnImportList.isNotEmpty) {
-      testOnImport = '${splitTestOnImportList.first.first}) ${splitTestOnImportList.first.last}';
+      testOnImport =
+          '${splitTestOnImportList.first.first}) ${splitTestOnImportList.first.last}';
       builder.write(testOnString = '${splitTestOnImportList.first.first}) ');
       twoNewlines();
     }
 
-    final dartImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'dart:')).toSet();
-    final packageImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'package:${_formatter.packageName}')).toSet();
-    final relativeImports = imports.difference(dartImports).where((ce) => !ce.toString().replaceAll(testOnString, '').startsWith('import \'package:')).toSet();
-    final otherImports = imports.difference(dartImports).difference(packageImports).difference(relativeImports);
+    final dartImports = imports
+        .where((ce) => ce
+            .toString()
+            .replaceAll(testOnString, '')
+            .startsWith('import \'dart:'))
+        .toSet();
+    final packageImports = imports
+        .where((ce) => ce
+            .toString()
+            .replaceAll(testOnString, '')
+            .startsWith('import \'package:${_formatter.packageName}'))
+        .toSet();
+    final relativeImports = imports
+        .difference(dartImports)
+        .where((ce) => !ce
+            .toString()
+            .replaceAll(testOnString, '')
+            .startsWith('import \'package:'))
+        .toSet();
+    final otherImports = imports
+        .difference(dartImports)
+        .difference(packageImports)
+        .difference(relativeImports);
 
     final writeFunc = (_ce) {
       ImportDirective ce = _ce as ImportDirective;
@@ -1819,12 +1843,16 @@ class SourceVisitor extends ThrowingAstVisitor {
       newline();
     };
 
-    final sortFunc = (c1, c2) => c1.toString().replaceAll(testOnString, '').compareTo(c2.toString().replaceAll(testOnString, ''));
+    final sortFunc = (c1, c2) => c1
+        .toString()
+        .replaceAll(testOnString, '')
+        .compareTo(c2.toString().replaceAll(testOnString, ''));
 
-    [dartImports, otherImports, packageImports, relativeImports].forEach((imports) {
+    [dartImports, otherImports, packageImports, relativeImports]
+        .forEach((imports) {
       imports.toList()
-          ..sort(sortFunc)
-          ..forEach(writeFunc);
+        ..sort(sortFunc)
+        ..forEach(writeFunc);
       twoNewlines();
     });
 
@@ -1953,11 +1981,13 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       // Replace double quotes if the string is double quoted and doesn't contain any single quotes
       // Defined as a function to avoid processing unless needed
-      bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted && !parent.elements.whereType<InterpolationString>().any((element) {
-        return element.contents.lexeme.contains(newQuote);
-      });
+      bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted &&
+          !parent.elements.whereType<InterpolationString>().any((element) {
+            return element.contents.lexeme.contains(newQuote);
+          });
 
-      _writeStringLiteral(node.contents, shouldReplaceDoubleQuotes: shouldReplaceDoubleQuotes);
+      _writeStringLiteral(node.contents,
+          shouldReplaceDoubleQuotes: shouldReplaceDoubleQuotes);
       return;
     }
 
@@ -2285,11 +2315,14 @@ class SourceVisitor extends ThrowingAstVisitor {
   visitSimpleStringLiteral(SimpleStringLiteral node) {
     String newQuote = node.isMultiline ? "'''" : "'";
 
-    bool shouldReplaceDoubleQuotes = !node.isSingleQuoted && !node.literal.lexeme.contains(newQuote);
+    bool shouldReplaceDoubleQuotes =
+        !node.isSingleQuoted && !node.literal.lexeme.contains(newQuote);
 
     _writeStringLiteral(
       node.literal,
-      shouldReplaceDoubleQuotes: _formatter.fixes.contains(StyleFix.preferSingleQuotes) && shouldReplaceDoubleQuotes,
+      shouldReplaceDoubleQuotes:
+          _formatter.fixes.contains(StyleFix.preferSingleQuotes) &&
+              shouldReplaceDoubleQuotes,
     );
   }
 
@@ -3353,7 +3386,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// Splits multiline strings into separate chunks so that the line splitter
   /// can handle them correctly.
-  void _writeStringLiteral(Token string, {bool shouldReplaceDoubleQuotes = false}) {
+  void _writeStringLiteral(Token string,
+      {bool shouldReplaceDoubleQuotes = false}) {
     // Since we output the string literal manually, ensure any preceding
     // comments are written first.
     writePrecedingCommentsAndNewlines(string);
@@ -3362,13 +3396,18 @@ class SourceVisitor extends ThrowingAstVisitor {
     var lines = string.lexeme.split(_formatter.lineEnding);
     var offset = string.offset;
 
-    _writeText(shouldReplaceDoubleQuotes ? lines.first.replaceAll('"', "'") : lines.first, offset);
+    _writeText(
+        shouldReplaceDoubleQuotes
+            ? lines.first.replaceAll('"', "'")
+            : lines.first,
+        offset);
     offset += lines.first.length;
 
     for (var line in lines.skip(1)) {
       builder.writeWhitespace(Whitespace.newlineFlushLeft);
       offset++;
-      _writeText(shouldReplaceDoubleQuotes ? line.replaceAll('"', "'") : line, offset);
+      _writeText(
+          shouldReplaceDoubleQuotes ? line.replaceAll('"', "'") : line, offset);
       offset += line.length;
     }
   }

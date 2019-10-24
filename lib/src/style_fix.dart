@@ -21,7 +21,8 @@ class StyleFix {
   static const optionalNew =
       StyleFix._("optional-new", 'Remove "new" keyword.');
 
-  static const preferSingleQuotes = StyleFix._('prefer-single-quotes', 'Replaces "s with \'s');
+  static const preferSingleQuotes =
+      StyleFix._('prefer-single-quotes', 'Replaces "s with \'s');
   static const sortImports = StyleFix._('sort-imports', 'Sort imports');
   static const sortProps = StyleFix._('sort-props', 'Sort props');
 

@@ -53,7 +53,11 @@ class DartFormatter {
   ///
   /// While formatting, also applies any of the given [fixes].
   DartFormatter(
-      {this.lineEnding, int pageWidth, int indent, Iterable<StyleFix> fixes, this.packageName})
+      {this.lineEnding,
+      int pageWidth,
+      int indent,
+      Iterable<StyleFix> fixes,
+      this.packageName})
       : pageWidth = pageWidth ?? 80,
         indent = indent ?? 0 {
     if (fixes != null) this.fixes.addAll(fixes);

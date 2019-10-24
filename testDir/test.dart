@@ -1,4 +1,3 @@
-
 @TestOn()
 import 'dart:collection';
 import 'dart:async';
@@ -27,9 +26,7 @@ class Test {
       ..e()
       ..aa()
       // comment for d
-      ..d = () {
-
-      }
+      ..d = () {}
       ..f = "double quotes"
       ..a = 0;
   }

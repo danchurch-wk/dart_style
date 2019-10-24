@@ -65,7 +65,8 @@ void main(List<String> args) {
           "stdin.",
       defaultsTo: "<stdin>");
   parser.addOption("package-name",
-      help: "The name of the package. Used to be able to sort imports with a package section."
+      help:
+          "The name of the package. Used to be able to sort imports with a package section."
           "The sort fix will not consider packages if not supplied.",
       defaultsTo: null);
 

@@ -2313,6 +2313,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   visitSimpleStringLiteral(SimpleStringLiteral node) {
+    // logic for this inspired by:
+    // https://github.com/thosakwe/dart2_dev59/blob/2d30eb2bfe7c27c6ecf6f9dcae21cc1d55218c14/pkg/analysis_server/lib/src/services/correction/assist_internal.dart#L2929
     String newQuote = node.isMultiline ? "'''" : "'";
 
     bool shouldReplaceDoubleQuotes =

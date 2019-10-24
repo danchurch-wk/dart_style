@@ -25,6 +25,8 @@ class FormatterOptions {
   /// Whether symlinks should be traversed when formatting a directory.
   final bool followLinks;
 
+  final String packageName;
+
   /// The style fixes to apply while formatting.
   final Iterable<StyleFix> fixes;
 
@@ -32,7 +34,8 @@ class FormatterOptions {
       {this.indent = 0,
       this.pageWidth = 80,
       this.followLinks = false,
-      this.fixes});
+      this.fixes,
+      this.packageName});
 }
 
 /// How the formatter reports the results it produces.

@@ -38,6 +38,8 @@ class DartFormatter {
   /// The number of characters of indentation to prefix the output lines with.
   final int indent;
 
+  final String packageName;
+
   final Set<StyleFix> fixes = Set();
 
   /// Creates a new formatter for Dart code.
@@ -51,7 +53,7 @@ class DartFormatter {
   ///
   /// While formatting, also applies any of the given [fixes].
   DartFormatter(
-      {this.lineEnding, int pageWidth, int indent, Iterable<StyleFix> fixes})
+      {this.lineEnding, int pageWidth, int indent, Iterable<StyleFix> fixes, this.packageName})
       : pageWidth = pageWidth ?? 80,
         indent = indent ?? 0 {
     if (fixes != null) this.fixes.addAll(fixes);

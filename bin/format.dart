@@ -64,6 +64,10 @@ void main(List<String> args) {
       help: "The path name to show when an error occurs in source read from "
           "stdin.",
       defaultsTo: "<stdin>");
+  parser.addOption("package-name",
+      help: "The name of the package. Used to be able to sort imports with a package section."
+          "The sort fix will not consider packages if not supplied.",
+      defaultsTo: null);
 
   parser.addFlag("profile", negatable: false, hide: true);
   parser.addFlag("transform", abbr: "t", negatable: false, hide: true);
@@ -181,7 +185,8 @@ void main(List<String> args) {
       indent: indent,
       pageWidth: pageWidth,
       followLinks: followLinks,
-      fixes: fixes);
+      fixes: fixes,
+      packageName: argResults["package-name"]);
 
   if (argResults.rest.isEmpty) {
     formatStdin(options, selection, argResults["stdin-name"] as String);
@@ -221,7 +226,8 @@ void formatStdin(FormatterOptions options, List<int> selection, String name) {
     var formatter = DartFormatter(
         indent: options.indent,
         pageWidth: options.pageWidth,
-        fixes: options.fixes);
+        fixes: options.fixes,
+        packageName: options.packageName);
     try {
       options.reporter.beforeFile(null, name);
       var source = SourceCode(input.toString(),

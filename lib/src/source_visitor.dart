@@ -592,15 +592,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
 
     if (_formatter.fixes.contains(StyleFix.sortProps)) {
-      Set<AstNode> propertyCascades = Set<AstNode>.from(node.cascadeSections.whereType<AssignmentExpression>());
-
       visitNodes(
-        [
-          // Sort property assignments first, sorted
-          ...propertyCascades.toList()..sort((a, b) => '$a'.compareTo('$b')),
-          // Put anything else after (mostly method calls?) and DO NOT SORT
-          ...node.cascadeSections.toSet().difference(propertyCascades),
-        ],
+        node.cascadeSections.toList()..sort((a, b) {
+          // Don't sort method invocations, only properties
+          if ([a, b].whereType<MethodInvocation>().isNotEmpty) return 0;
+
+          return '$a'.compareTo('$b');
+        }),
         between: zeroSplit,
       );
     } else {
@@ -1787,7 +1785,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
 
     final dartImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'dart:')).toSet();
-    final packageImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'package:w_sox')).toSet();
+    final packageImports = imports.where((ce) => ce.toString().replaceAll(testOnString, '').startsWith('import \'package:${_formatter.packageName}')).toSet();
     final relativeImports = imports.difference(dartImports).where((ce) => !ce.toString().replaceAll(testOnString, '').startsWith('import \'package:')).toSet();
     final otherImports = imports.difference(dartImports).difference(packageImports).difference(relativeImports);
 
@@ -1823,14 +1821,12 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     final sortFunc = (c1, c2) => c1.toString().replaceAll(testOnString, '').compareTo(c2.toString().replaceAll(testOnString, ''));
 
-    dartImports.toList()..sort(sortFunc)..forEach(writeFunc);
-    twoNewlines();
-    otherImports.toList()..sort(sortFunc)..forEach(writeFunc);
-    twoNewlines();
-    packageImports.toList()..sort(sortFunc)..forEach(writeFunc);
-    twoNewlines();
-    relativeImports.toList()..sort(sortFunc)..forEach(writeFunc);
-    twoNewlines();
+    [dartImports, otherImports, packageImports, relativeImports].forEach((imports) {
+      imports.toList()
+          ..sort(sortFunc)
+          ..forEach(writeFunc);
+      twoNewlines();
+    });
 
     _didVisitImport = true;
   }
@@ -1952,16 +1948,20 @@ class SourceVisitor extends ThrowingAstVisitor {
   visitInterpolationString(InterpolationString node) {
     StringInterpolation parent = node.parent;
 
-    String newQuote = parent.isMultiline ? "'''" : "'";
+    if (_formatter.fixes.contains(StyleFix.preferSingleQuotes)) {
+      String newQuote = parent.isMultiline ? "'''" : "'";
 
-    bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted && parent.elements.whereType<InterpolationString>().any((element) {
-      return !element.contents.lexeme.contains(newQuote);
-    });
+      // Replace double quotes if the string is double quoted and doesn't contain any single quotes
+      // Defined as a function to avoid processing unless needed
+      bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted && !parent.elements.whereType<InterpolationString>().any((element) {
+        return element.contents.lexeme.contains(newQuote);
+      });
 
-    _writeStringLiteral(
-      node.contents,
-      shouldReplaceDoubleQuotes: _formatter.fixes.contains(StyleFix.preferSingleQuotes) && shouldReplaceDoubleQuotes,
-    );
+      _writeStringLiteral(node.contents, shouldReplaceDoubleQuotes: shouldReplaceDoubleQuotes);
+      return;
+    }
+
+    _writeStringLiteral(node.contents);
   }
 
   visitIsExpression(IsExpression node) {

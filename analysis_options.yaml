@@ -7,3 +7,4 @@ linter:
     - unawaited_futures
     - unnecessary_const
     - unnecessary_new
+    - prefer_interpolation_to_compose_strings

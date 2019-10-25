@@ -25,6 +25,9 @@ class StyleFix {
       StyleFix._('prefer-single-quotes', 'Replaces "s with \'s');
   static const sortImports = StyleFix._('sort-imports', 'Sort imports');
   static const sortProps = StyleFix._('sort-props', 'Sort props');
+  static const preferWhereType = StyleFix._('prefer-iterable-whereType', 'Prefer iterable whereType');
+  static const unnecessaryParenthesis  = StyleFix._('unnecessary-parenthesis', 'Unnecessary parenthesis');
+  static const preferVoidToNull  = StyleFix._('prefer-void-to-null', 'Prefer void to null');
 
   static const all = [
     docComments,
@@ -35,6 +38,9 @@ class StyleFix {
     preferSingleQuotes,
     sortImports,
     sortProps,
+    preferWhereType,
+    unnecessaryParenthesis,
+    preferVoidToNull,
   ];
 
   final String name;

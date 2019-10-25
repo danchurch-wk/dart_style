@@ -24,6 +24,24 @@ import 'source_code.dart';
 import 'style_fix.dart';
 import 'whitespace.dart';
 
+import 'dart_type_utils.dart';
+
+class _ContainsFunctionExpressionVisitor extends UnifyingAstVisitor<void> {
+  bool hasFunctionExpression = false;
+
+  @override
+  void visitFunctionExpression(FunctionExpression node) {
+    hasFunctionExpression = true;
+  }
+
+  @override
+  void visitNode(AstNode node) {
+    if (!hasFunctionExpression) {
+      node.visitChildren(this);
+    }
+  }
+}
+
 /// Visits every token of the AST and passes all of the relevant bits to a
 /// [ChunkBuilder].
 class SourceVisitor extends ThrowingAstVisitor {
@@ -2056,6 +2074,46 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   visitMethodInvocation(MethodInvocation node) {
+    final stringified = node.argumentList.arguments.isNotEmpty ? node.argumentList.arguments.first.toString() : '';
+
+    // prefer_iterable_whereType
+    if (_formatter.fixes.contains(StyleFix.preferWhereType) && isIncorrectEmpty(node)) {
+      // Try to keep the entire method invocation one line.
+      builder.nestExpression();
+      builder.startSpan();
+
+      if (node.target != null) {
+        builder.startSpan(Cost.constructorName);
+        visit(node.target);
+        soloZeroSplit();
+      }
+
+      // If target is null, this will be `..` for a cascade.
+      token(node.operator);
+      _writeText('whereType', 0);
+
+      // TODO(rnystrom): Currently, there are no constraints between a generic
+      // method's type arguments and arguments. That can lead to some funny
+      // splitting like:
+      //
+      //     method<VeryLongType,
+      //             AnotherTypeArgument>(argument,
+      //         argument, argument, argument);
+      //
+      // The indentation is fine, but splitting in the middle of each argument
+      // list looks kind of strange. If this ends up happening in real world
+      // code, consider putting a constraint between them.
+      builder.nestExpression();
+      
+      final val = stringified.split('is ');
+      _writeText('<${val[1]}>()', 0);
+      builder.unnest();
+
+      builder.endSpan();
+      builder.unnest();
+      return;
+    }
+
     // If there's no target, this is a "bare" function call like "foo(1, 2)",
     // or a section in a cascade.
     //
@@ -2107,6 +2165,52 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
 
     CallChainVisitor(this, node).visit();
+  }
+
+  bool isIncorrectEmpty(node) {
+    if (node.methodName.name != 'where') return false;
+
+    print('test1');
+    Expression target = node.realTarget;
+    if (target == null) {
+      return false;
+    }
+    print('test2');
+
+    final args = node.argumentList?.arguments;
+    if (args == null || args.length != 1) return false;
+
+    final arg = args.first;
+    print(arg);
+    if (arg is FunctionExpression) {
+      print('test3');
+      if (arg.parameters.parameters.length != 1) return false;
+
+      final body = arg.body;
+      Expression expression;
+      if (body is BlockFunctionBody) {
+        final statements = body.block.statements;
+        if (statements.length != 1) return false;
+        final statement = body.block.statements.first;
+        if (statement is ReturnStatement) {
+          expression = statement.expression;
+        }
+      } else if (body is ExpressionFunctionBody) {
+        expression = body.expression;
+      }
+      expression = expression?.unParenthesized;
+      if (expression is IsExpression && expression.notOperator == null) {
+        print('test4');
+        final target = expression.expression;
+        if (target is SimpleIdentifier &&
+            target.name == arg.parameters.parameters.first.identifier.name) {
+          return true;
+        }
+      }
+    }
+
+    print('test5');
+    return false;
   }
 
   visitMixinDeclaration(MixinDeclaration node) {
@@ -2175,13 +2279,130 @@ class SourceVisitor extends ThrowingAstVisitor {
     _visitCombinator(node.onKeyword, node.superclassConstraints);
   }
 
-  visitParenthesizedExpression(ParenthesizedExpression node) {
-    builder.nestExpression();
-    token(node.leftParenthesis);
-    visit(node.expression);
-    builder.unnest();
-    token(node.rightParenthesis);
+  void visitParenthesizedExpression(ParenthesizedExpression node) {
+    if (_formatter.fixes.contains(StyleFix.unnecessaryParenthesis) && !_areParenthesisNecessary(node)) {
+      builder.nestExpression();
+      visit(node.expression);
+      builder.unnest();
+    } else {
+      builder.nestExpression();
+      token(node.leftParenthesis);
+      visit(node.expression);
+      builder.unnest();
+      token(node.rightParenthesis);
+    }
   }
+
+  // https://github.com/dart-lang/linter/blob/a14d0e1104dd48b1d383add1a08aba5b532ef6a6/lib/src/rules/unnecessary_parenthesis.dart#L50
+  bool _areParenthesisNecessary(node) {
+    if (node.expression is SimpleIdentifier) {
+      var parent = node.parent;
+      if (parent is PropertyAccess) {
+        if (parent.propertyName.name == 'hashCode' ||
+            parent.propertyName.name == 'runtimeType') {
+          // Code like `(String).hashCode` is allowed.
+          return true;
+        }
+      } else if (parent is MethodInvocation) {
+        if (parent.methodName.name == 'noSuchMethod' ||
+            parent.methodName.name == 'toString') {
+          // Code like `(String).noSuchMethod()` is allowed.
+          return true;
+        }
+      }
+      return false;
+    }
+
+    final parent = node.parent;
+
+    if (parent is ParenthesizedExpression) {
+      return false;
+    }
+
+    // `a..b=(c..d)` is OK.
+    if (node.expression is CascadeExpression ||
+        node.thisOrAncestorMatching(
+                (n) => n is Statement || n is CascadeExpression)
+            is CascadeExpression) {
+      return true;
+    }
+
+    // Constructor field initializers are rather unguarded by delimiting
+    // tokens, which can get confused with a function expression. See test
+    // cases for issues #1395 and #1473.
+    if (parent is ConstructorFieldInitializer &&
+        _containsFunctionExpression(node)) {
+      return true;
+    }
+
+    if (parent is Expression) {
+      if (parent is BinaryExpression) return true;
+      if (parent is ConditionalExpression) return true;
+      if (parent is CascadeExpression) return true;
+      if (parent is FunctionExpressionInvocation) return true;
+
+      // A prefix expression (! or -) can have an argument wrapped in
+      // "unnecessary" parens if that argument has potentially confusing
+      // whitespace after its first token.
+      if (parent is PrefixExpression &&
+          _expressionStartsWithWhitespace(node.expression)) return true;
+
+      // Another case of the above exception, something like
+      // `!(const [7]).contains(5);`, where the _parent's_ parent is the
+      // PrefixExpression.
+      if (parent is MethodInvocation) {
+        Expression target = parent.target;
+        if (parent.parent is PrefixExpression &&
+            target == node &&
+            _expressionStartsWithWhitespace(node.expression)) return true;
+      }
+
+      // Something like `({1, 2, 3}).forEach(print);`.
+      // The parens cannot be removed because then the curly brackets are not
+      // interpreted as a set-or-map literal.
+      if (parent is PropertyAccess || parent is MethodInvocation) {
+        var target = (parent as dynamic).target;
+        if (target == node &&
+            node.expression is SetOrMapLiteral &&
+            parent.parent is ExpressionStatement) return true;
+      }
+
+      if (parent.precedence < node.expression.precedence) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _containsFunctionExpression(ParenthesizedExpression node) {
+    final containsFunctionExpressionVisitor =
+        _ContainsFunctionExpressionVisitor();
+    node.accept(containsFunctionExpressionVisitor);
+    return containsFunctionExpressionVisitor.hasFunctionExpression;
+  }
+
+  /// Returns whether [node] "starts" with whitespace.
+  ///
+  /// That is, is there definitely whitespace after the first token in [node]?
+  bool _expressionStartsWithWhitespace(Expression node) =>
+      // As in, `!(await foo)`.
+      node is AwaitExpression ||
+      // As in, `!(new Foo())`.
+      (node is InstanceCreationExpression && node.keyword != null) ||
+      // No TypedLiteral (ListLiteral, MapLiteral, SetLiteral) accepts `-` or
+      // `!` as a prefix operator, but this method can be called recursively,
+      // so this catches things like `!(const [].contains(42))`.
+      (node is TypedLiteral && node.constKeyword != null) ||
+      // As in, `!(const List(3).contains(7))`, and chains like
+      // `-(new List(3).skip(1).take(3).skip(1).length)`.
+      (node is MethodInvocation &&
+          _expressionStartsWithWhitespace(node.target)) ||
+      // As in, `-(new List(3).length)`, and chains like
+      // `-(new List(3).length.bitLength.bitLength)`.
+      (node is PropertyAccess && _expressionStartsWithWhitespace(node.target));
 
   visitPartDirective(PartDirective node) {
     _visitDirectiveMetadata(node);
@@ -2315,6 +2536,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   visitSimpleStringLiteral(SimpleStringLiteral node) {
     // logic for this inspired by:
     // https://github.com/thosakwe/dart2_dev59/blob/2d30eb2bfe7c27c6ecf6f9dcae21cc1d55218c14/pkg/analysis_server/lib/src/services/correction/assist_internal.dart#L2929
+    // TODO: use https://github.com/dart-lang/linter/blob/a14d0e1104dd48b1d383add1a08aba5b532ef6a6/lib/src/rules/prefer_single_quotes.dart instead
     String newQuote = node.isMultiline ? "'''" : "'";
 
     bool shouldReplaceDoubleQuotes =
@@ -2447,9 +2669,57 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   visitTypeName(TypeName node) {
-    visit(node.name);
-    visit(node.typeArguments);
-    token(node.question);
+    if (_formatter.fixes.contains(StyleFix.preferVoidToNull) && _isNull(node)) {
+      if ((node.typeArguments?.arguments?.isNotEmpty ?? false) && node.typeArguments.arguments.first.toString().contains('Null')) {
+        visit(node.name);
+        _writeText('<', 0);
+        final s = (node.typeArguments?.arguments ?? []).map((i) {
+          return i.toString().replaceAll('Null', 'void');
+        }).join(', ');
+        _writeText(s, 0);
+        _writeText('>', 0);
+        token(node.question);
+      } else {
+        _writeText('void', 0);
+      }
+    } else {
+      visit(node.name);
+      visit(node.typeArguments);
+      token(node.question);
+    }
+  }
+
+  // prefer_void_to_null
+  bool _isNull(TypeName node) {
+    if (!'$node'.contains('Null')) {
+      return false;
+    }
+
+    final parent = node.parent;
+
+    // Null Function()
+    if (parent is GenericFunctionType) {
+      return false;
+    }
+
+    // Function(Null)
+    if (parent is SimpleFormalParameter &&
+        parent.parent is FormalParameterList &&
+        parent.parent.parent is GenericFunctionType) {
+      return false;
+    }
+
+    // <Null>[] or <Null, Null>{}
+    if (parent is TypeArgumentList) {
+      final literal = parent.parent;
+      if (literal is ListLiteral && literal.elements.isEmpty) {
+        return false;
+      } else if (literal is SetOrMapLiteral && literal.elements.isEmpty) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   visitTypeParameter(TypeParameter node) {

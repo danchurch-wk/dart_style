@@ -2,15 +2,15 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.example.format;
+library irdartfmt.example.format;
 
 import 'dart:io';
 import 'dart:mirrors';
 
 import 'package:path/path.dart' as p;
 
-import 'package:dart_style/dart_style.dart';
-import 'package:dart_style/src/debug.dart' as debug;
+import 'package:irdartfmt/irdartfmt.dart';
+import 'package:irdartfmt/src/debug.dart' as debug;
 
 void main(List<String> args) {
   // Enable debugging so you can see some of the formatter's internal state.
@@ -65,7 +65,7 @@ void runTest(String path, int line) {
   // package, which loads this suite into an isolate.
   var testDir = p.join(
       p.dirname(currentMirrorSystem()
-          .findLibrary(#dart_style.example.format)
+          .findLibrary(#irdartfmt.example.format)
           .uri
           .path),
       "../test");

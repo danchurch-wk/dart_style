@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.src.chunk_builder;
+library irdartfmt.src.chunk_builder;
 
 import 'chunk.dart';
 import 'dart_formatter.dart';
@@ -429,6 +429,8 @@ class ChunkBuilder {
     _nesting.indent(spaces);
   }
 
+  int get indentation => _nesting.indentation;
+
   /// Discards the most recent indentation level.
   void unindent() {
     _nesting.unindent();
@@ -600,30 +602,38 @@ class ChunkBuilder {
   ChunkBuilder endBlock(Rule ignoredSplit, {bool forceSplit}) {
     _divideChunks();
 
+    _parent._endChildBlock(
+        firstFlushLeft: _firstFlushLeft, forceSplit: shouldSplit(ignoredSplit, forceSplit: forceSplit));
+
+    return _parent;
+  }
+
+  bool shouldSplit(Rule ignoredSplit, {String str, bool forceSplit = false}) {
+    bool shouldSplit = forceSplit;
     // If we don't already know if the block is going to split, see if it
     // contains any hard splits or is longer than a page.
-    if (!forceSplit) {
+    if (!shouldSplit) {
       var length = 0;
       for (var chunk in _chunks) {
+        // print('chunk b4 $chunk');
+        if (!(str?.contains(chunk.toString()) ?? true)) continue;
+        // print('chunk after $chunk');
         length += chunk.length + chunk.unsplitBlockLength;
         if (length > _formatter.pageWidth) {
-          forceSplit = true;
+          shouldSplit = true;
           break;
         }
 
         if (chunk.rule != null &&
             chunk.rule.isHardened &&
             chunk.rule != ignoredSplit) {
-          forceSplit = true;
+          shouldSplit = true;
           break;
         }
       }
     }
 
-    _parent._endChildBlock(
-        firstFlushLeft: _firstFlushLeft, forceSplit: forceSplit);
-
-    return _parent;
+    return shouldSplit;
   }
 
   /// Finishes off the last chunk in a child block of this parent.

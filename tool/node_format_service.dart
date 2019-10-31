@@ -6,7 +6,7 @@ import 'dart:math' as math;
 
 import 'package:js/js.dart';
 
-import 'package:dart_style/dart_style.dart';
+import 'package:irdartfmt/irdartfmt.dart';
 
 @JS()
 @anonymous

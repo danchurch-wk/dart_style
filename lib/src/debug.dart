@@ -3,7 +3,7 @@
 // BSD-style license that can be found in the LICENSE file.
 
 /// Internal debugging utilities.
-library dart_style.src.debug;
+library irdartfmt.src.debug;
 
 import 'dart:math' as math;
 

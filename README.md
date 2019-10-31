@@ -1,4 +1,4 @@
-The dart_style package defines an automatic, opinionated formatter for Dart
+The irdartfmt package defines an automatic, opinionated formatter for Dart
 code. It replaces the whitespace in your program with what it deems to be the
 best formatting for it. Resulting code should follow the [Dart style guide][]
 but, moreso, should look nice to most human readers, most of the time.
@@ -62,10 +62,10 @@ That has the latest version of dartfmt that was available when the SDK was
 released.
 
 If you want to make sure you are running the latest version of dartfmt, you can
-[globally activate][] the package from the dart_style package on
+[globally activate][] the package from the irdartfmt package on
 pub.dev:
 
-    $ pub global activate dart_style
+    $ pub global activate irdartfmt
     $ dartfmt ...
 
 For this to work, you need to put pub's bin directory on your PATH before the
@@ -75,8 +75,8 @@ Dart SDL directory. Otherwise, the SDK's dartfmt will shadow this one.
 
 If you don't want pub to put `dartfmt` on your PATH, you can run it explicitly:
 
-    $ pub global activate dart_style --no-executables
-    $ pub global run dart_style:format ...
+    $ pub global activate irdartfmt --no-executables
+    $ pub global run irdartfmt:format ...
 
 ## Using dartfmt
 
@@ -114,13 +114,13 @@ correctly formatted.
 [presubmit script]: http://www.chromium.org/developers/how-tos/depottools/presubmit-scripts
 [commit hook]: http://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks
 
-## Using the dart_style API
+## Using the irdartfmt API
 
-The package also exposes a single dart_style library containing a programmatic
+The package also exposes a single irdartfmt library containing a programmatic
 API for formatting code. Simple usage looks like this:
 
 ```dart
-import 'package:dart_style/dart_style.dart';
+import 'package:irdartfmt/irdartfmt.dart';
 
 main() {
   var formatter = new DartFormatter();
@@ -147,5 +147,5 @@ main() {
 * Before filing a bug, or if you want to understand how work on the
   formatter is managed, see how we [track issues][].
 
-[faq]: https://github.com/dart-lang/dart_style/wiki/FAQ
-[track issues]: https://github.com/dart-lang/dart_style/wiki/Tracking-issues
+[faq]: https://github.com/dart-lang/irdartfmt/wiki/FAQ
+[track issues]: https://github.com/dart-lang/irdartfmt/wiki/Tracking-issues

@@ -10,7 +10,7 @@ import 'package:node_preamble/preamble.dart' as preamble;
 import 'package:pub_semver/pub_semver.dart';
 import 'package:yaml/yaml.dart' as yaml;
 
-/// Matches the version line in dart_style's pubspec.
+/// Matches the version line in irdartfmt's pubspec.
 final _versionPattern = RegExp(r"^version: .*$", multiLine: true);
 
 main(List<String> args) => grind(args);

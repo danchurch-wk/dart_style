@@ -2,13 +2,13 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.benchmark.benchmark;
+library irdartfmt.benchmark.benchmark;
 
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import 'package:dart_style/dart_style.dart';
+import 'package:irdartfmt/irdartfmt.dart';
 
 const NUM_TRIALS = 100;
 const FORMATS_PER_TRIAL = 30;

@@ -1,4 +1,4 @@
->>> https://github.com/dart-lang/dart_style/issues/14
+>>> https://github.com/dart-lang/irdartfmt/issues/14
 class A {
   final Map x;
   A() : x = {

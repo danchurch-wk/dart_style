@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.test.command_line;
+library irdartfmt.test.command_line;
 
 import 'dart:convert';
 

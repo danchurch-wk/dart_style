@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.src.line_splitting.solve_state;
+library irdartfmt.src.line_splitting.solve_state;
 
 import '../debug.dart' as debug;
 import '../nesting_level.dart';

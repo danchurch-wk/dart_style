@@ -2,11 +2,11 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.test.source_code_test;
+library irdartfmt.test.source_code_test;
 
 import 'package:test/test.dart';
 
-import 'package:dart_style/dart_style.dart';
+import 'package:irdartfmt/irdartfmt.dart';
 
 void main() {
   var selection = SourceCode("123456;", selectionStart: 3, selectionLength: 2);

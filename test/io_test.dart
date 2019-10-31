@@ -2,17 +2,17 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.test.io;
+library irdartfmt.test.io;
 
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dart_style/src/io.dart';
+import 'package:irdartfmt/src/io.dart';
 import 'package:path/path.dart' as p;
 import 'package:test_descriptor/test_descriptor.dart' as d;
 import 'package:test/test.dart';
 
-import 'package:dart_style/src/formatter_options.dart';
+import 'package:irdartfmt/src/formatter_options.dart';
 
 import 'utils.dart';
 

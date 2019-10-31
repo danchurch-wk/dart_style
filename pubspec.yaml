@@ -5,7 +5,7 @@ author: Dart Team <misc@dartlang.org>
 description: >-
   Opinionated, automatic Dart source code formatter.
   Provides an API and a CLI tool.
-homepage: https://github.com/dart-lang/dart_style
+homepage: https://github.com/dart-lang/irdartfmt
 
 environment:
   sdk: '>=2.3.0 <3.0.0'

@@ -3,11 +3,11 @@
 // BSD-style license that can be found in the LICENSE file.
 
 @TestOn("vm")
-library dart_style.test.string_compare_test;
+library irdartfmt.test.string_compare_test;
 
 import 'package:test/test.dart';
 
-import 'package:dart_style/src/string_compare.dart';
+import 'package:irdartfmt/src/string_compare.dart';
 
 void main() {
   test("whitespace at end of string", () {

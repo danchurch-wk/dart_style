@@ -3,11 +3,11 @@
 // BSD-style license that can be found in the LICENSE file.
 
 @TestOn("vm")
-library dart_style.test.formatter_test;
+library irdartfmt.test.formatter_test;
 
 import 'package:test/test.dart';
 
-import 'package:dart_style/dart_style.dart';
+import 'package:irdartfmt/irdartfmt.dart';
 
 import 'utils.dart';
 

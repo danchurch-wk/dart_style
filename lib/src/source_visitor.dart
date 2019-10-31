@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.src.source_visitor;
+library irdartfmt.src.source_visitor;
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
@@ -1329,6 +1329,10 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     _metadataRules.removeLast();
 
+    // if (builder.shouldSplit(null, str: node.parent.toString())) {
+    //   _writeText(',', 0);
+    // }
+
     token(node.rightParenthesis);
     if (nestExpression) builder.unnest();
   }
@@ -1504,7 +1508,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // TODO(rnystrom): This is working but not tested. As of 2016/11/29, the
     // latest version of analyzer on pub does not parse generic lambdas. When
-    // a version of it that does is published, upgrade dart_style to use it and
+    // a version of it that does is published, upgrade irdartfmt to use it and
     // then test it:
     //
     //     >>> generic function expression
@@ -3302,6 +3306,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       if (parameter.endToken.next.type == TokenType.COMMA) {
         token(parameter.endToken.next);
       }
+      // _writeText(',', 0);
 
       // If the optional parameters start after this one, put the delimiter
       // at the end of its line.
@@ -3318,6 +3323,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     var firstDelimiter =
         parameters.rightDelimiter ?? parameters.rightParenthesis;
     writePrecedingCommentsAndNewlines(firstDelimiter);
+
     builder = builder.endBlock(null, forceSplit: true);
     builder.endRule();
 

@@ -1,4 +1,4 @@
-library dart_style.src.string_compare;
+library irdartfmt.src.string_compare;
 
 /// Returns `true` if [c] represents a whitespace code unit allowed in Dart
 /// source code.

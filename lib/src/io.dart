@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.src.io;
+library irdartfmt.src.io;
 
 import 'dart:io';
 
@@ -70,8 +70,7 @@ bool processFile(FormatterOptions options, File file, {String label}) {
   var formatter = DartFormatter(
       indent: options.indent,
       pageWidth: options.pageWidth,
-      fixes: options.fixes,
-      packageName: options.packageName);
+      fixes: options.fixes);
   try {
     var source = SourceCode(file.readAsStringSync(), uri: file.path);
     options.reporter.beforeFile(file, label);
@@ -87,10 +86,10 @@ bool processFile(FormatterOptions options, File file, {String label}) {
   } on UnexpectedOutputException catch (err) {
     stderr.writeln('''Hit a bug in the formatter when formatting $label.
 $err
-Please report at github.com/dart-lang/dart_style/issues.''');
+Please report at github.com/dart-lang/irdartfmt/issues.''');
   } catch (err, stack) {
     stderr.writeln('''Hit a bug in the formatter when formatting $label.
-Please report at github.com/dart-lang/dart_style/issues.
+Please report at github.com/dart-lang/irdartfmt/issues.
 $err
 $stack''');
   }

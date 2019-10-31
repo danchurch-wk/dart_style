@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart_style.test.utils;
+library irdartfmt.test.utils;
 
 import 'dart:async';
 import 'dart:io';
@@ -13,7 +13,7 @@ import 'package:test/test.dart';
 import 'package:test_descriptor/test_descriptor.dart' as d;
 import 'package:test_process/test_process.dart';
 
-import 'package:dart_style/dart_style.dart';
+import 'package:irdartfmt/irdartfmt.dart';
 
 const unformattedSource = 'void  main()  =>  print("hello") ;';
 const formattedSource = 'void main() => print("hello");\n';
@@ -28,7 +28,7 @@ Future<TestProcess> runFormatter([List<String> args]) {
   // Locate the "test" directory. Use mirrors so that this works with the test
   // package, which loads this suite into an isolate.
   var testDir = p.dirname(currentMirrorSystem()
-      .findLibrary(#dart_style.test.utils)
+      .findLibrary(#irdartfmt.test.utils)
       .uri
       .toFilePath());
 
@@ -56,7 +56,7 @@ void testDirectory(String name, [Iterable<StyleFix> fixes]) {
   // Locate the "test" directory. Use mirrors so that this works with the test
   // package, which loads this suite into an isolate.
   var testDir = p.dirname(currentMirrorSystem()
-      .findLibrary(#dart_style.test.utils)
+      .findLibrary(#irdartfmt.test.utils)
       .uri
       .toFilePath());
 
@@ -77,7 +77,7 @@ void testFile(String path, [Iterable<StyleFix> fixes]) {
   // Locate the "test" directory. Use mirrors so that this works with the test
   // package, which loads this suite into an isolate.
   var testDir = p.dirname(currentMirrorSystem()
-      .findLibrary(#dart_style.test.utils)
+      .findLibrary(#irdartfmt.test.utils)
       .uri
       .toFilePath());
 

@@ -92,7 +92,7 @@
 # 1.1.3
 
 * Preserve whitespace in multi-line strings inside string interpolations (#711).
-  **Note!** This bug means that dart_style 1.1.2 may make semantics changes to
+  **Note!** This bug means that irdartfmt 1.1.2 may make semantics changes to
   your strings. You should avoid that version and use 1.1.3.
 
 * Set max SDK version to <3.0.0, and adjusted other dependencies.
@@ -208,9 +208,9 @@
 
 # 0.2.14
 
-* Update to analyzer 0.29.3. This should make dart_style a little more resilient
+* Update to analyzer 0.29.3. This should make irdartfmt a little more resilient
   to breaking changes in analyzer that add support for new syntax that
-  dart_style can't format yet.
+  irdartfmt can't format yet.
 
 # 0.2.13
 

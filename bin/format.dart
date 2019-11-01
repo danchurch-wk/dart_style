@@ -187,7 +187,7 @@ void main(List<String> args) {
   try {
     packageName = argResults["package-name"];
   } catch (e) {
-
+    // do nothing
   }
 
   var options = FormatterOptions(reporter,

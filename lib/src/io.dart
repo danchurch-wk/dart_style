@@ -68,9 +68,11 @@ bool processFile(FormatterOptions options, File file, {String label}) {
   if (label == null) label = file.path;
 
   var formatter = DartFormatter(
-      indent: options.indent,
-      pageWidth: options.pageWidth,
-      fixes: options.fixes);
+    indent: options.indent,
+    pageWidth: options.pageWidth,
+    fixes: options.fixes,
+    packageName: options.packageName,
+  );
   try {
     var source = SourceCode(file.readAsStringSync(), uri: file.path);
     options.reporter.beforeFile(file, label);

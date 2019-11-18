@@ -16,7 +16,7 @@ import 'package:irdartfmt/src/source_code.dart';
 import 'package:irdartfmt/src/style_fix.dart';
 
 // Note: The following line of code is modified by tool/grind.dart.
-const version = "1.3.1";
+const version = "1.3.3";
 
 void main(List<String> args) {
   var parser = ArgParser(allowTrailingOptions: true);

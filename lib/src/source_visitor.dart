@@ -361,7 +361,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     // If the argument list has a trailing comma, format it like a collection
     // literal where each argument goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (node.arguments.last.endToken.next.type == TokenType.COMMA || (shouldFixCommas && parentHeight > builder.pageWidth)) {
+    if (hasCommaAfter(node.arguments.last) || (shouldFixCommas && parentHeight > builder.pageWidth)) {
       _visitCollectionLiteral(
           null, node.leftParenthesis, node.arguments, node.rightParenthesis, null, shouldFixCommas);
       return;
@@ -393,7 +393,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     // If the argument list has a trailing comma, format it like a collection
     // literal where each argument goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (arguments.last.endToken.next.type == TokenType.COMMA) {
+    if (hasCommaAfter(arguments.last)) {
       _visitCollectionLiteral(
           null, node.leftParenthesis, arguments, node.rightParenthesis);
       return;
@@ -416,7 +416,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       // If the argument list has a trailing comma, format it like a collection
       // literal where each argument goes on its own line, they are indented +2,
       // and the ")" ends up on its own line.
-      if (arguments.last.endToken.next.type == TokenType.COMMA) {
+      if (hasCommaAfter(arguments.last)) {
         _visitCollectionLiteral(
             null, node.leftParenthesis, arguments, node.rightParenthesis);
         return;
@@ -686,7 +686,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     return arguments == null ||
         arguments.arguments.isEmpty ||
-        arguments.arguments.last.endToken.next.type != TokenType.COMMA;
+        !hasCommaAfter(arguments.arguments.last);
   }
 
   /// Whether a cascade should be allowed to be inline as opposed to one
@@ -937,7 +937,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   void _visitConstructorInitializers(ConstructorDeclaration node) {
     var hasTrailingComma = node.parameters.parameters.isNotEmpty &&
-        node.parameters.parameters.last.endToken.next.type == TokenType.COMMA;
+        hasCommaAfter(node.parameters.parameters.last);
 
     if (hasTrailingComma) {
       // Since the ")", "])", or "})" on the preceding line doesn't take up
@@ -1124,7 +1124,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     visitCommaSeparatedNodes(node.constants, between: splitOrTwoNewlines);
 
     // If there is a trailing comma, always force the constants to split.
-    if (node.constants.last.endToken.next.type == TokenType.COMMA) {
+    if (hasCommaAfter(node.constants.last)) {
       builder.forceRules();
     }
 
@@ -1310,7 +1310,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     // If the parameter list has a trailing comma, format it like a collection
     // literal where each parameter goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (node.parameters.last.endToken.next.type == TokenType.COMMA || (shouldFixCommas && lineLength > builder.pageWidth)) {
+    if (hasCommaAfter(node.parameters.last) || (shouldFixCommas && lineLength > builder.pageWidth)) {
       _visitTrailingCommaParameterList(node, forceComma: shouldFixCommas);
       return;
     }
@@ -1346,11 +1346,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       for (var param in requiredParams) {
         visit(param);
-
-        // Write the following comma.
-        if (param.endToken.next.type == TokenType.COMMA) {
-          token(param.endToken.next);
-        }
+        _writeCommaAfter(param);
 
         if (param != requiredParams.last) rule.beforeArgument(split());
       }
@@ -1377,11 +1373,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       for (var param in optionalParams) {
         visit(param);
-
-        // Write the following comma.
-        if (param.endToken.next.type == TokenType.COMMA) {
-          token(param.endToken.next);
-        }
+        _writeCommaAfter(param);
 
         if (param != optionalParams.last) namedRule.beforeArgument(split());
       }
@@ -3327,13 +3319,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       }
 
       visit(element);
-
-      // The comma after the element.
-      if (forceComma) {
-        token(Token(TokenType.COMMA, 0));
-      } else if (element.endToken.next.type == TokenType.COMMA) {
-        token(element.endToken.next);
-      }
+      _writeCommaAfter(element, forceComma: forceComma);
     }
 
     builder.endRule();
@@ -3342,10 +3328,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     var force = _collectionSplits.removeLast();
 
     // If the collection has a trailing comma, the user must want it to split.
-    if (elements.isNotEmpty &&
-        elements.last.endToken.next.type == TokenType.COMMA) {
-      force = true;
-    }
+    if (elements.isNotEmpty && hasCommaAfter(elements.last)) force = true;
 
     if (node != null) _endPossibleConstContext(node.constKeyword);
     _endLiteralBody(rightBracket, ignoredRule: rule, forceSplit: force);
@@ -3391,13 +3374,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     for (var parameter in parameters.parameters) {
       visit(parameter);
-
-      // The comma after the parameter.
-      if (parameter.endToken.next.type == TokenType.COMMA) {
-        token(parameter.endToken.next);
-      } else if (forceComma) {
-        token(Token(TokenType.COMMA, 0));
-      }
+      _writeCommaAfter(parameter, forceComma: forceComma);
 
       // If the optional parameters start after this one, put the delimiter
       // at the end of its line.
@@ -3501,8 +3478,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     var parent = node.parent;
     if (parent is NamedExpression) parent = parent.parent;
 
-    return parent is ArgumentList &&
-        parent.arguments.last.endToken.next.type == TokenType.COMMA;
+    return parent is ArgumentList && hasCommaAfter(parent.arguments.last);
   }
 
   /// Whether [node] is a spread of a collection literal.
@@ -3807,6 +3783,33 @@ class SourceVisitor extends ThrowingAstVisitor {
         offset += line.length;
       }
     }
+  }
+
+  /// Write the comma token following [node], if there is one.
+  void _writeCommaAfter(AstNode node, {bool forceComma = false}) {
+    token(_commaAfter(node, forceComma: forceComma));
+  }
+
+  /// Whether there is a comma token immediately following [node].
+  bool hasCommaAfter(AstNode node) => _commaAfter(node) != null;
+
+  /// The comma token immediately following [node] if there is one, or `null`.
+  Token _commaAfter(AstNode node, {bool forceComma = false}) {
+    // The comma after the element.
+    if (forceComma) {
+      token(Token(TokenType.COMMA, 0));
+    } else if (node.endToken.next.type == TokenType.COMMA) {
+      token(node.endToken.next);
+    }
+
+    // TODO(sdk#38990): endToken doesn't include the "?" on a nullable
+    // function-typed formal, so check for that case and handle it.
+    if (node.endToken.next.type == TokenType.QUESTION &&
+        node.endToken.next.next.type == TokenType.COMMA) {
+      return node.endToken.next.next;
+    }
+
+    return null;
   }
 
   /// Emit the given [modifier] if it's non null, followed by non-breaking

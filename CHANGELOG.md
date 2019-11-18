@@ -1,6 +1,11 @@
+# 1.3.3
+
+* Support `package:analyzer` `0.39.0`.
+
 # 1.3.2
 
 * Restore the code that publishes the dart-style npm package.
+* Preserve comma after nullable function-typed parameters (#862).
 
 # 1.3.1
 

@@ -3797,9 +3797,9 @@ class SourceVisitor extends ThrowingAstVisitor {
   Token _commaAfter(AstNode node, {bool forceComma = false}) {
     // The comma after the element.
     if (forceComma) {
-      token(Token(TokenType.COMMA, 0));
+      return Token(TokenType.COMMA, 0);
     } else if (node.endToken.next.type == TokenType.COMMA) {
-      token(node.endToken.next);
+      return node.endToken.next;
     }
 
     // TODO(sdk#38990): endToken doesn't include the "?" on a nullable

@@ -9,7 +9,7 @@
             "program": "bin/format.dart",
             "request": "launch",
             "type": "dart",
-            "args": ["-l 120", "--fix-sort-imports", "asdf.dart"]
+            "args": ["-l 120", "--fix-prefer-trailing-parameter-list-comma", "--fix-prefer-single-quotes", "asdf.dart"]
         }
     ]
 }

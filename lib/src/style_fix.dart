@@ -22,12 +22,24 @@ class StyleFix {
       StyleFix._("optional-new", 'Remove "new" keyword.');
 
   static const preferSingleQuotes =
-      StyleFix._('prefer-single-quotes', 'Replaces "s with \'s');
-  static const sortImports = StyleFix._('sort-imports', 'Sort imports');
-  static const sortProps = StyleFix._('sort-props', 'Sort props');
-  static const preferWhereType = StyleFix._('prefer-iterable-whereType', 'Prefer iterable whereType');
-  static const unnecessaryParenthesis  = StyleFix._('unnecessary-parenthesis', 'Unnecessary parenthesis');
-  static const preferVoidToNull  = StyleFix._('prefer-void-to-null', 'Prefer void to null');
+      StyleFix._('prefer-single-quotes', 'Replace double quotes with single quotes when the double quotes are not necessary.');
+
+  static const sortImports = StyleFix._('sort-imports', 'Sort imports. Use with package-name to sort them into their own section.');
+
+  static const sortProps = StyleFix._('sort-props', 'Sort cascades.');
+
+  static const unnecessaryParenthesis = StyleFix._('unnecessary-parenthesis', 'Remove unnecessary parenthesis.');
+
+
+  // WIP, don't use
+
+  static const preferTrailingParameterListComma = StyleFix._('prefer-trailing-parameter-list-comma', 'Adds a trailing comma to parameter lists that exceed the page width.');
+
+  static const String wipMessage = 'WIP - Do not use.';
+  static const preferMultilineCascade = StyleFix._('prefer-multiline-cascade', '$wipMessage Ensure each part of a cascade is on it\'s own line');
+
+  static const preferWhereType = StyleFix._('prefer-iterable-whereType', '$wipMessage [].where((v) => v is T) -> [].whereType<T>()');
+  static const preferVoidToNull  = StyleFix._('prefer-void-to-null', '$wipMessage Null -> void');
 
   static const all = [
     docComments,
@@ -41,6 +53,8 @@ class StyleFix {
     preferWhereType,
     unnecessaryParenthesis,
     preferVoidToNull,
+    preferTrailingParameterListComma,
+    preferMultilineCascade,
   ];
 
   final String name;

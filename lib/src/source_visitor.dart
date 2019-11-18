@@ -4,6 +4,8 @@
 
 library irdartfmt.src.source_visitor;
 
+import 'dart:math';
+
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
@@ -338,12 +340,30 @@ class SourceVisitor extends ThrowingAstVisitor {
       return;
     }
 
+    // + 1 for semi colon
+    int parentHeight = builder.indentation + node.parent.length + 1;
+
+    if (node.parent is FunctionExpressionInvocation) {
+      parentHeight = builder.indentation + node.length;
+    }
+
+    if (node.parent is MethodInvocation || node.parent is InstanceCreationExpression) {
+      parentHeight = 0;
+    }
+
+    bool shouldFixCommas = _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
+
+    if (shouldFixCommas && parentHeight > builder.pageWidth) {
+      // print(':: node.parent ${node.parent}');
+      // print(':: node.parent.runtimeType ${node.parent.runtimeType}');
+    }
+
     // If the argument list has a trailing comma, format it like a collection
     // literal where each argument goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (node.arguments.last.endToken.next.type == TokenType.COMMA) {
+    if (node.arguments.last.endToken.next.type == TokenType.COMMA || (shouldFixCommas && parentHeight > builder.pageWidth)) {
       _visitCollectionLiteral(
-          null, node.leftParenthesis, node.arguments, node.rightParenthesis);
+          null, node.leftParenthesis, node.arguments, node.rightParenthesis, null, shouldFixCommas);
       return;
     }
 
@@ -672,6 +692,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Whether a cascade should be allowed to be inline as opposed to one
   /// expression per line.
   bool _allowInlineCascade(CascadeExpression node) {
+    if (_formatter.fixes.contains(StyleFix.preferMultilineCascade) && node.cascadeSections.length > 1) return false;
+
     // If the receiver is an expression that makes the cascade's very low
     // precedence confusing, force it to split. For example:
     //
@@ -1241,11 +1263,55 @@ class SourceVisitor extends ThrowingAstVisitor {
       return;
     }
 
+    int lineLength = 0;
+    if (node.parent is ConstructorDeclaration) {
+      print('yes');
+      ConstructorDeclaration constructorDeclaration = node.parent;
+      //  - (node.parent as ConstructorDeclaration).childEntities
+      int initializerLength = 0;
+      Iterable<int> initializerSegmentLengths = constructorDeclaration.initializers.map((i) => i.length);
+      if (initializerSegmentLengths.isNotEmpty) {
+        initializerLength = initializerSegmentLengths.reduce((i, j) => i + j) + constructorDeclaration.initializers.length * 2;
+      }
+
+      lineLength = constructorDeclaration.length - initializerLength - constructorDeclaration.body.length - 1 + builder.indentation;
+    } else if (node.parent is FunctionExpression && node.parent.parent is FunctionDeclaration) {
+      print('nah');
+      // + 1 fpr {
+      FunctionExpression expression = node.parent;
+      FunctionDeclaration declaration = node.parent.parent;
+
+      int metadataLength = 0;
+      Iterable<int> metadataSegmentLengths = declaration.metadata.map((i) => i.length);
+      if (metadataSegmentLengths.isNotEmpty) {
+        metadataLength = metadataSegmentLengths.reduce((i, j) => i + j);
+      }
+
+      // print(':: $node');
+
+      lineLength = declaration.length - expression.childEntities.last.length - (declaration.documentationComment?.length ?? 0) - metadataLength + builder.indentation + 1;
+    } else {
+      print(node.parent.runtimeType);
+    }
+
+    if (['([', '({'].any(node.toString().startsWith)) {
+      lineLength = 0;
+      print('no');
+    }
+
+    bool shouldFixCommas = _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
+
+    if (shouldFixCommas && lineLength > builder.pageWidth) {
+      // print('Formal param $node ${node.toString().startsWith('([')}');
+    }
+
+    print(':: node $node shouldFixCommas $shouldFixCommas lineLength $lineLength');
+
     // If the parameter list has a trailing comma, format it like a collection
     // literal where each parameter goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (node.parameters.last.endToken.next.type == TokenType.COMMA) {
-      _visitTrailingCommaParameterList(node);
+    if (node.parameters.last.endToken.next.type == TokenType.COMMA || (shouldFixCommas && lineLength > builder.pageWidth)) {
+      _visitTrailingCommaParameterList(node, forceComma: shouldFixCommas);
       return;
     }
 
@@ -1501,7 +1567,23 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.functionDeclaration);
   }
 
+  bool _shouldAddParensToFunctionExpression(FunctionExpression node) {
+    if (node.parent is AssignmentExpression && node.parent.parent is CascadeExpression) {
+      if (!'$node'.startsWith('((') && (node.body.childEntities.first is Token) && (node.body.childEntities.first as Token).lexeme == '=>') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   visitFunctionExpression(FunctionExpression node) {
+    bool shouldAddParens = _shouldAddParensToFunctionExpression(node);
+    
+    if (_formatter.fixes.contains(StyleFix.sortProps) && shouldAddParens) {
+      _writeStringLiteral(Token(TokenType.OPEN_PAREN, 0));
+    }
+
     // Inside a function body is no longer in the surrounding const context.
     var oldConstNesting = _constNesting;
     _constNesting = 0;
@@ -1522,6 +1604,10 @@ class SourceVisitor extends ThrowingAstVisitor {
     _visitBody(node.typeParameters, node.parameters, node.body);
 
     _constNesting = oldConstNesting;
+
+    if (_formatter.fixes.contains(StyleFix.sortProps) && shouldAddParens) {
+      _writeStringLiteral(Token(TokenType.CLOSE_PAREN, 0));
+    }
   }
 
   visitFunctionExpressionInvocation(FunctionExpressionInvocation node) {
@@ -2006,7 +2092,9 @@ class SourceVisitor extends ThrowingAstVisitor {
       bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted &&
           !parent.elements.whereType<InterpolationString>().any((element) {
             return element.contents.lexeme.contains(newQuote);
-          });
+          }) && (parent.elements.first == node || parent.elements.last == node);
+
+      // print('$node $shouldReplaceDoubleQuotes');
 
       _writeStringLiteral(node.contents,
           shouldReplaceDoubleQuotes: shouldReplaceDoubleQuotes);
@@ -2174,20 +2262,20 @@ class SourceVisitor extends ThrowingAstVisitor {
   bool isIncorrectEmpty(node) {
     if (node.methodName.name != 'where') return false;
 
-    print('test1');
+    // print('test1');
     Expression target = node.realTarget;
     if (target == null) {
       return false;
     }
-    print('test2');
+    // print('test2');
 
     final args = node.argumentList?.arguments;
     if (args == null || args.length != 1) return false;
 
     final arg = args.first;
-    print(arg);
+    // print(arg);
     if (arg is FunctionExpression) {
-      print('test3');
+      // print('test3');
       if (arg.parameters.parameters.length != 1) return false;
 
       final body = arg.body;
@@ -2204,7 +2292,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       }
       expression = expression?.unParenthesized;
       if (expression is IsExpression && expression.notOperator == null) {
-        print('test4');
+        // print('test4');
         final target = expression.expression;
         if (target is SimpleIdentifier &&
             target.name == arg.parameters.parameters.first.identifier.name) {
@@ -2213,7 +2301,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       }
     }
 
-    print('test5');
+    // print('test5');
     return false;
   }
 
@@ -3163,7 +3251,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// considered "collection-like". In that case, [node] is `null`.
   void _visitCollectionLiteral(TypedLiteral node, Token leftBracket,
       Iterable<AstNode> elements, Token rightBracket,
-      [int cost]) {
+      [int cost, bool forceComma = false]) {
     if (node != null) {
       // See if `const` should be removed.
       if (node.constKeyword != null &&
@@ -3241,7 +3329,9 @@ class SourceVisitor extends ThrowingAstVisitor {
       visit(element);
 
       // The comma after the element.
-      if (element.endToken.next.type == TokenType.COMMA) {
+      if (forceComma) {
+        token(Token(TokenType.COMMA, 0));
+      } else if (element.endToken.next.type == TokenType.COMMA) {
         token(element.endToken.next);
       }
     }
@@ -3270,7 +3360,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// We don't reuse [_visitCollectionLiteral] here because there are enough
   /// weird differences around optional parameters that it's easiest just to
   /// give them their own method.
-  void _visitTrailingCommaParameterList(FormalParameterList parameters) {
+  void _visitTrailingCommaParameterList(FormalParameterList parameters, {bool forceComma = false}) {
     // Can't have a trailing comma if there are no parameters.
     assert(parameters.parameters.isNotEmpty);
 
@@ -3305,8 +3395,9 @@ class SourceVisitor extends ThrowingAstVisitor {
       // The comma after the parameter.
       if (parameter.endToken.next.type == TokenType.COMMA) {
         token(parameter.endToken.next);
+      } else if (forceComma) {
+        token(Token(TokenType.COMMA, 0));
       }
-      // _writeText(',', 0);
 
       // If the optional parameters start after this one, put the delimiter
       // at the end of its line.
@@ -3674,19 +3765,47 @@ class SourceVisitor extends ThrowingAstVisitor {
     var lines = string.lexeme.split(_formatter.lineEnding);
     var offset = string.offset;
 
-    _writeText(
-        shouldReplaceDoubleQuotes
-            ? lines.first.replaceAll('"', "'")
-            : lines.first,
-        offset);
-    offset += lines.first.length;
+    bool isStartMultiline = lines.first.startsWith("'''") || lines.first.startsWith('"""');
+    bool isEndMultiline = lines.last.endsWith("'''") || lines.last.endsWith('"""');
 
-    for (var line in lines.skip(1)) {
-      builder.writeWhitespace(Whitespace.newlineFlushLeft);
-      offset++;
+    if (isStartMultiline || isEndMultiline) {
       _writeText(
-          shouldReplaceDoubleQuotes ? line.replaceAll('"', "'") : line, offset);
-      offset += line.length;
+          shouldReplaceDoubleQuotes && isStartMultiline
+              ? lines.first.replaceFirst('"""', "'''")
+              : lines.first,
+          offset);
+      offset += lines.first.length;
+
+      for (var line in lines.skip(1).take(max(0, lines.length - 2))) {
+        builder.writeWhitespace(Whitespace.newlineFlushLeft);
+        offset++;
+        _writeText(line, offset);
+        offset += line.length;
+      }
+
+      if (lines.length != 1) {
+        builder.writeWhitespace(Whitespace.newlineFlushLeft);
+        offset++;
+        _writeText(
+            shouldReplaceDoubleQuotes && isEndMultiline ? lines.last.replaceRange(lines.last.length - 3, lines.last.length, "'''") : lines.last, offset);
+        offset += lines.last.length;
+      }
+    } else {
+      String output = lines.first;
+
+      if (output.startsWith('"')) output = output.replaceRange(0, 1, "'");
+      if (output.startsWith('r"')) output = output.replaceRange(1, 2, "'");
+      if (output.endsWith('"')) output = output.replaceRange(lines.first.length - 1, lines.first.length, "'");
+
+      _writeText(shouldReplaceDoubleQuotes ? output : lines.first, offset);
+      offset += lines.first.length;
+
+      for (var line in lines.skip(1)) {
+        builder.writeWhitespace(Whitespace.newlineFlushLeft);
+        offset++;
+        _writeText(line, offset);
+        offset += line.length;
+      }
     }
   }
 

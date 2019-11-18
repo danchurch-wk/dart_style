@@ -3798,7 +3798,9 @@ class SourceVisitor extends ThrowingAstVisitor {
     // The comma after the element.
     if (forceComma) {
       return Token(TokenType.COMMA, 0);
-    } else if (node.endToken.next.type == TokenType.COMMA) {
+    }
+    
+    if (node.endToken.next.type == TokenType.COMMA) {
       return node.endToken.next;
     }
 

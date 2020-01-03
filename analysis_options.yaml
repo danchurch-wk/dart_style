@@ -7,3 +7,6 @@ linter:
     - unawaited_futures
     - unnecessary_const
     - unnecessary_new
+    - prefer_const_declarations
+    - unnecessary_this
+    - always_put_required_named_parameters_first

@@ -1012,8 +1012,11 @@ class SourceVisitor extends ThrowingAstVisitor {
   visitConstructorFieldInitializer(ConstructorFieldInitializer node) {
     builder.nestExpression();
 
-    token(node.thisKeyword);
-    token(node.period);
+    if (!_formatter.fixes.contains(StyleFix.noThis)) {
+      token(node.thisKeyword);
+      token(node.period);
+    }
+    
     visit(node.fieldName);
 
     _visitAssignment(node.equals, node.expression);
@@ -1250,8 +1253,26 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
+  bool f(FormalParameterList node) {
+    bool nonRequiredSeen = false;
+    for (FormalParameter param in node.parameters.where((p) => p.isNamed)) {
+      if (param.metadata != null && param.metadata.isNotEmpty && param.metadata.any((metadata) => metadata.toString() == '@required')) {
+        if (nonRequiredSeen) {
+          return true;
+        }
+      } else {
+        nonRequiredSeen = true;
+      }
+    }
+
+    return false;
+  }
+
   visitFormalParameterList(FormalParameterList node,
       {bool nestExpression = true}) {
+    if (f(node)) {
+      print('test');
+    }
     // Corner case: empty parameter lists.
     if (node.parameters.isEmpty) {
       token(node.leftParenthesis);
@@ -1371,11 +1392,33 @@ class SourceVisitor extends ThrowingAstVisitor {
       // "[" or "{" for optional parameters.
       token(node.leftDelimiter);
 
-      for (var param in optionalParams) {
-        visit(param);
-        _writeCommaAfter(param);
+      if (_formatter.fixes.contains(StyleFix.requiredFirst)) {
+        final sortedParams = optionalParams.toList()..sort((i, j) {
+          bool isFirstRequired = i.metadata != null && i.metadata.isNotEmpty && i.metadata.first.toString() == '@required';
+          bool isSecondRequired = j.metadata != null && j.metadata.isNotEmpty && j.metadata.first.toString() == '@required';
 
-        if (param != optionalParams.last) namedRule.beforeArgument(split());
+          if (isFirstRequired && !isSecondRequired) return -1;
+          if (!isFirstRequired && isSecondRequired) return 1;
+          return 0;
+        });
+
+        for (var param in sortedParams) {
+          visit(param);
+          if (param != sortedParams.last){
+            _writeCommaAfter(param, forceComma: true);
+          } else {
+            _writeCommaAfter(optionalParams.last);
+          }
+
+          if (param != sortedParams.last) namedRule.beforeArgument(split());
+        }
+      } else {
+        for (var param in optionalParams) {
+          visit(param);
+          _writeCommaAfter(param);
+
+          if (param != optionalParams.last) namedRule.beforeArgument(split());
+        }
       }
 
       builder.endBlockArgumentNesting();

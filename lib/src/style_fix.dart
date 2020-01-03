@@ -30,6 +30,10 @@ class StyleFix {
 
   static const unnecessaryParenthesis = StyleFix._('unnecessary-parenthesis', 'Remove unnecessary parenthesis.');
 
+  static const requiredFirst = StyleFix._('required-parameters-first', 'Sort required parameters first');
+
+  static const noThis = StyleFix._('no-this', '“This” is bad, pls no');
+
 
   // WIP, don't use
 
@@ -55,6 +59,8 @@ class StyleFix {
     preferVoidToNull,
     preferTrailingParameterListComma,
     preferMultilineCascade,
+    requiredFirst,
+    noThis,
   ];
 
   final String name;

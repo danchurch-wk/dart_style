@@ -1,8 +1,9 @@
 // Copyright (c) 2014, the Dart project authors.  Please see the AUTHORS file
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
-
 library irdartfmt.src.chunk_builder;
+
+import 'dart:math' as math;
 
 import 'chunk.dart';
 import 'dart_formatter.dart';
@@ -16,14 +17,17 @@ import 'style_fix.dart';
 import 'whitespace.dart';
 
 /// Matches if the last character of a string is an identifier character.
-final _trailingIdentifierChar = RegExp(r"[a-zA-Z0-9_]$");
+final _trailingIdentifierChar = RegExp(r'[a-zA-Z0-9_]$');
 
 /// Matches a JavaDoc-style doc comment that starts with "/**" and ends with
 /// "*/" or "**/".
-final _javaDocComment = RegExp(r"^/\*\*([^*/][\s\S]*?)\*?\*/$");
+final _javaDocComment = RegExp(r'^/\*\*([^*/][\s\S]*?)\*?\*/$');
 
 /// Matches the leading "*" in a line in the middle of a JavaDoc-style comment.
-var _javaDocLine = RegExp(r"^\s*\*(.*)");
+final _javaDocLine = RegExp(r'^\s*\*(.*)');
+
+/// Matches spaces at the beginning of as string.
+final _leadingIndentation = RegExp(r'^(\s*)');
 
 /// Takes the incremental serialized output of [SourceVisitor]--the source text
 /// along with any comments and preserved whitespace--and produces a coherent
@@ -66,7 +70,7 @@ class ChunkBuilder {
   /// the hard split appears. For example, a hard split in a positional
   /// argument list needs to force the named arguments to split too, but we
   /// don't create that rule until after the positional arguments are done.
-  final _hardSplitRules = Set<Rule>();
+  final _hardSplitRules = <Rule>{};
 
   /// The list of rules that are waiting until the next whitespace has been
   /// written before they start.
@@ -291,7 +295,7 @@ class ChunkBuilder {
 
         // The comment follows other text, so we need to decide if it gets a
         // space before it or not.
-        if (_needsSpaceBeforeComment(comment)) _writeText(" ");
+        if (_needsSpaceBeforeComment(comment)) _writeText(' ');
       } else {
         // The comment starts a line, so make sure it stays on its own line.
         _writeHardSplit(
@@ -324,7 +328,7 @@ class ChunkBuilder {
         //     /**
         //      * Some doc comment.
         //      */ someFunction() { ... }
-        if (linesAfter == 0 && comments.last.text.contains("\n")) {
+        if (linesAfter == 0 && comments.last.text.contains('\n')) {
           linesAfter = 1;
         }
       }
@@ -357,31 +361,44 @@ class ChunkBuilder {
       return;
     }
 
-    // Remove a leading "*" from the middle lines.
-    var lines = match.group(1).split("\n").toList();
-    for (var i = 1; i < lines.length - 1; i++) {
-      var line = lines[i];
-      var match = _javaDocLine.firstMatch(line);
-      if (match != null) {
-        line = match.group(1);
-      } else {
-        // Note that this may remove deliberate leading whitespace. In tests on
-        // a large corpus, though, I couldn't find examples of that.
-        line = line.trimLeft();
+    var lines = match.group(1).split('\n').toList();
+    var leastIndentation = comment.text.length;
+
+    for (var i = 0; i < lines.length; i++) {
+      // Trim trailing whitespace and turn any all-whitespace lines to "".
+      var line = lines[i].trimRight();
+
+      // Remove any leading "*" from the middle lines.
+      if (i > 0 && i < lines.length - 1) {
+        var match = _javaDocLine.firstMatch(line);
+        if (match != null) {
+          line = match.group(1);
+        }
       }
+
+      // Find the line with the least indentation.
+      if (line.isNotEmpty) {
+        var indentation = _leadingIndentation.firstMatch(line).group(1).length;
+        leastIndentation = math.min(leastIndentation, indentation);
+      }
+
       lines[i] = line;
     }
 
     // Trim the first and last lines if empty.
-    if (lines.first.trim().isEmpty) lines.removeAt(0);
-    if (lines.isNotEmpty && lines.last.trim().isEmpty) lines.removeLast();
+    if (lines.first.isEmpty) lines.removeAt(0);
+    if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
 
     // Don't completely eliminate an empty block comment.
-    if (lines.isEmpty) lines.add("");
+    if (lines.isEmpty) lines.add('');
 
     for (var line in lines) {
-      if (line.isNotEmpty && !line.startsWith(" ")) line = " $line";
-      _writeText("///${line.trimRight()}");
+      _writeText('///');
+      if (line.isNotEmpty) {
+        // Discard any indentation shared by all lines.
+        line = line.substring(leastIndentation);
+        _writeText(' $line');
+      }
       _pendingWhitespace = Whitespace.newline;
       _emitPendingWhitespace();
     }
@@ -463,7 +480,7 @@ class ChunkBuilder {
   ///
   /// If omitted, defaults to a new [Rule].
   void startRule([Rule rule]) {
-    if (rule == null) rule = Rule();
+    rule ??= Rule();
 
     // If there are any pending lazy rules, start them now so that the proper
     // stack ordering of rules is maintained.
@@ -491,7 +508,7 @@ class ChunkBuilder {
   ///
   /// If [rule] is omitted, defaults to a new [Rule].
   void startLazyRule([Rule rule]) {
-    if (rule == null) rule = Rule();
+    rule ??= Rule();
 
     _lazyRules.add(rule);
   }
@@ -524,7 +541,7 @@ class ChunkBuilder {
   /// `true`, commits the nesting change immediately instead of waiting until
   /// after the next chunk of text is written.
   void nestExpression({int indent, bool now}) {
-    if (now == null) now = false;
+    now ??= false;
 
     _nesting.nest(indent);
     if (now) _nesting.commitNesting();
@@ -538,7 +555,7 @@ class ChunkBuilder {
   /// If [now] is `false`, does not commit the nesting change until after the
   /// next chunk of text is written.
   void unnest({bool now}) {
-    if (now == null) now = true;
+    now ??= true;
 
     _nesting.unnest();
     if (now) _nesting.commitNesting();
@@ -657,7 +674,7 @@ class ChunkBuilder {
     _divideChunks();
 
     if (debug.traceChunkBuilder) {
-      debug.log(debug.green("\nBuilt:"));
+      debug.log(debug.green('\nBuilt:'));
       debug.dumpChunks(0, _chunks);
       debug.log();
     }
@@ -674,8 +691,8 @@ class ChunkBuilder {
 
       // If we haven't hit the beginning and/or end of the selection yet, they
       // must be at the very end of the code.
-      if (selectionStart == null) selectionStart = writer.length;
-      if (selectionEnd == null) selectionEnd = writer.length;
+      selectionStart ??= writer.length;
+      selectionEnd ??= writer.length;
 
       selectionLength = selectionEnd - selectionStart;
     }
@@ -693,7 +710,7 @@ class ChunkBuilder {
 
   void endPreventSplit() {
     _preventSplitNesting--;
-    assert(_preventSplitNesting >= 0, "Mismatched calls.");
+    assert(_preventSplitNesting >= 0, 'Mismatched calls.');
   }
 
   /// Writes the current pending [Whitespace] to the output, if any.
@@ -705,7 +722,7 @@ class ChunkBuilder {
     // trailing.
     switch (_pendingWhitespace) {
       case Whitespace.space:
-        _writeText(" ");
+        _writeText(' ');
         break;
 
       case Whitespace.newline:
@@ -742,16 +759,16 @@ class ChunkBuilder {
     if (_chunks.isEmpty) return false;
 
     // Multi-line comments are always pushed to the next line.
-    if (comment.contains("\n")) return false;
+    if (comment.contains('\n')) return false;
 
     var text = _chunks.last.text;
 
     // A block comment following a comma probably refers to the following item.
-    if (text.endsWith(",") && comment.startsWith("/*")) return false;
+    if (text.endsWith(',') && comment.startsWith('/*')) return false;
 
     // If the text before the split is an open grouping character, it looks
     // better to keep it with the elements than with the bracket itself.
-    return !text.endsWith("(") && !text.endsWith("[") && !text.endsWith("{");
+    return !text.endsWith('(') && !text.endsWith('[') && !text.endsWith('{');
   }
 
   /// Returns `true` if [comment] appears to be a magic generic method comment.
@@ -760,7 +777,7 @@ class ChunkBuilder {
   ///
   ///     int f/*<S, T>*/(int x) => 3;
   bool _isGenericMethodComment(SourceComment comment) {
-    return comment.text.startsWith("/*<") || comment.text.startsWith("/*=");
+    return comment.text.startsWith('/*<') || comment.text.startsWith('/*=');
   }
 
   /// Returns `true` if a space should be output between the end of the current
@@ -783,7 +800,7 @@ class ChunkBuilder {
     if (!_chunks.last.canAddText) return false;
 
     var text = _chunks.last.text;
-    if (text.endsWith("\n")) return false;
+    if (text.endsWith('\n')) return false;
 
     // Always put a space before line comments.
     if (comment.isLineComment) return true;
@@ -795,7 +812,7 @@ class ChunkBuilder {
     }
 
     // Block comments do not get a space if following a grouping character.
-    return !text.endsWith("(") && !text.endsWith("[") && !text.endsWith("{");
+    return !text.endsWith('(') && !text.endsWith('[') && !text.endsWith('{');
   }
 
   /// Returns `true` if a space should be output after the last comment which
@@ -808,18 +825,18 @@ class ChunkBuilder {
     if (!_chunks.last.canAddText) return false;
 
     // Magic generic method comments like "Foo/*<T>*/" don't get spaces.
-    if (_isGenericMethodComment(comments.last) && token == "(") {
+    if (_isGenericMethodComment(comments.last) && token == '(') {
       return false;
     }
 
     // Otherwise, it gets a space if the following token is not a delimiter or
     // the empty string, for EOF.
-    return token != ")" &&
-        token != "]" &&
-        token != "}" &&
-        token != "," &&
-        token != ";" &&
-        token != "";
+    return token != ')' &&
+        token != ']' &&
+        token != '}' &&
+        token != ',' &&
+        token != ';' &&
+        token != '';
   }
 
   /// Appends a hard split with the current indentation and nesting (the latter
@@ -921,7 +938,7 @@ class ChunkBuilder {
   void _hardenRules() {
     if (_hardSplitRules.isEmpty) return;
 
-    walkConstraints(rule) {
+    void walkConstraints(rule) {
       rule.harden();
 
       // Follow this rule's constraints, recursively.

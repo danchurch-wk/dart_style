@@ -7,6 +7,7 @@ library irdartfmt.src.source_visitor;
 import 'dart:math';
 
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/standard_ast_factory.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
@@ -101,10 +102,10 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// letter (so that we can distinguish them from SCREAMING_CAPS constants).
   static bool _looksLikeClassName(String name) {
     // Handle the weird lowercase corelib names.
-    if (name == "bool") return true;
-    if (name == "double") return true;
-    if (name == "int") return true;
-    if (name == "num") return true;
+    if (name == 'bool') return true;
+    if (name == 'double') return true;
+    if (name == 'int') return true;
+    if (name == 'num') return true;
 
     // TODO(rnystrom): A simpler implementation is to test against the regex
     // "_?[A-Z].*?[a-z]". However, that currently has much worse performance on
@@ -143,7 +144,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   final DartFormatter _formatter;
 
   /// Cached line info for calculating blank lines.
-  LineInfo _lineInfo;
+  final LineInfo _lineInfo;
 
   /// The source being formatted.
   final SourceCode _source;
@@ -211,6 +212,10 @@ class SourceVisitor extends ThrowingAstVisitor {
   final Map<Token, Rule> _blockRules = {};
   final Map<Token, Chunk> _blockPreviousChunks = {};
 
+  /// Comments and new lines attached to tokens added here are suppressed
+  /// from the output.
+  final Set<Token> _suppressPrecedingCommentsAndNewLines = {};
+
   /// Initialize a newly created visitor to write source code representing
   /// the visited nodes to the given [writer].
   SourceVisitor(this._formatter, this._lineInfo, this._source) {
@@ -230,13 +235,14 @@ class SourceVisitor extends ThrowingAstVisitor {
     // Output trailing comments.
     writePrecedingCommentsAndNewlines(node.endToken.next);
 
-    assert(_constNesting == 0, "Should have exited all const contexts.");
+    assert(_constNesting == 0, 'Should have exited all const contexts.');
 
     // Finish writing and return the complete result.
     return builder.end();
   }
 
-  visitAdjacentStrings(AdjacentStrings node) {
+  @override
+  void visitAdjacentStrings(AdjacentStrings node) {
     // We generally want to indent adjacent strings because it can be confusing
     // otherwise when they appear in a list of expressions, like:
     //
@@ -305,7 +311,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitAnnotation(Annotation node) {
+  @override
+  void visitAnnotation(Annotation node) {
     token(node.atSign);
     visit(node.name);
     token(node.period);
@@ -328,7 +335,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// 4. Split between one or more positional arguments, trying to keep as many
   ///    on earlier lines as possible.
   /// 5. Split the named arguments each onto their own line.
-  visitArgumentList(ArgumentList node, {bool nestExpression = true}) {
+  @override
+  void visitArgumentList(ArgumentList node, {bool nestExpression = true}) {
     // Corner case: handle empty argument lists.
     if (node.arguments.isEmpty) {
       token(node.leftParenthesis);
@@ -372,7 +380,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (nestExpression) builder.unnest();
   }
 
-  visitAsExpression(AsExpression node) {
+  @override
+  void visitAsExpression(AsExpression node) {
     builder.startSpan();
     builder.nestExpression();
     visit(node.expression);
@@ -384,7 +393,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitAssertInitializer(AssertInitializer node) {
+  @override
+  void visitAssertInitializer(AssertInitializer node) {
     token(node.assertKeyword);
 
     var arguments = <Expression>[node.condition];
@@ -406,7 +416,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitAssertStatement(AssertStatement node) {
+  @override
+  void visitAssertStatement(AssertStatement node) {
     _simpleStatement(node, () {
       token(node.assertKeyword);
 
@@ -428,7 +439,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitAssignmentExpression(AssignmentExpression node) {
+  @override
+  void visitAssignmentExpression(AssignmentExpression node) {
     builder.nestExpression();
 
     visit(node.leftHandSide);
@@ -437,13 +449,15 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitAwaitExpression(AwaitExpression node) {
+  @override
+  void visitAwaitExpression(AwaitExpression node) {
     token(node.awaitKeyword);
     space();
     visit(node.expression);
   }
 
-  visitBinaryExpression(BinaryExpression node) {
+  @override
+  void visitBinaryExpression(BinaryExpression node) {
     builder.startSpan();
 
     // If a binary operator sequence appears immediately after a `=>`, don't
@@ -465,7 +479,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     // precedence level, we will break all of them.
     var precedence = node.operator.type.precedence;
 
-    traverse(Expression e) {
+    @override
+    void traverse(Expression e) {
       if (e is BinaryExpression && e.operator.type.precedence == precedence) {
         traverse(e.leftOperand);
 
@@ -492,7 +507,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endRule();
   }
 
-  visitBlock(Block node) {
+  @override
+  void visitBlock(Block node) {
     // Treat empty blocks specially. In most cases, they are not allowed to
     // split. However, an empty block as the then statement of an if with an
     // else is always split.
@@ -554,7 +570,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitBlockFunctionBody(BlockFunctionBody node) {
+  @override
+  void visitBlockFunctionBody(BlockFunctionBody node) {
     // Space after the parameter list.
     space();
 
@@ -568,18 +585,21 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.block);
   }
 
-  visitBooleanLiteral(BooleanLiteral node) {
+  @override
+  void visitBooleanLiteral(BooleanLiteral node) {
     token(node.literal);
   }
 
-  visitBreakStatement(BreakStatement node) {
+  @override
+  void visitBreakStatement(BreakStatement node) {
     _simpleStatement(node, () {
       token(node.breakKeyword);
       visit(node.label, before: space);
     });
   }
 
-  visitCascadeExpression(CascadeExpression node) {
+  @override
+  void visitCascadeExpression(CascadeExpression node) {
     var splitIfOperandsSplit =
         node.cascadeSections.length > 1 || _isCollectionLike(node.target);
 
@@ -725,7 +745,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     return true;
   }
 
-  visitCatchClause(CatchClause node) {
+  @override
+  void visitCatchClause(CatchClause node) {
     token(node.onKeyword, after: space);
     visit(node.exceptionType);
 
@@ -747,7 +768,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.body);
   }
 
-  visitClassDeclaration(ClassDeclaration node) {
+  @override
+  void visitClassDeclaration(ClassDeclaration node) {
     visitMetadata(node.metadata);
 
     builder.nestExpression();
@@ -772,7 +794,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _endBody(node.rightBracket);
   }
 
-  visitClassTypeAlias(ClassTypeAlias node) {
+  @override
+  void visitClassTypeAlias(ClassTypeAlias node) {
     visitMetadata(node.metadata);
 
     _simpleStatement(node, () {
@@ -794,11 +817,14 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitComment(Comment node) => null;
+  @override
+  void visitComment(Comment node) => null;
 
-  visitCommentReference(CommentReference node) => null;
+  @override
+  void visitCommentReference(CommentReference node) => null;
 
-  visitCompilationUnit(CompilationUnit node) {
+  @override
+  void visitCompilationUnit(CompilationUnit node) {
     visit(node.scriptTag);
 
     // Put a blank line between the library tag and the other directives.
@@ -844,7 +870,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitConditionalExpression(ConditionalExpression node) {
+  @override
+  void visitConditionalExpression(ConditionalExpression node) {
     builder.nestExpression();
 
     // Start lazily so we don't force the operator to split if a line comment
@@ -878,7 +905,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitConfiguration(Configuration node) {
+  @override
+  void visitConfiguration(Configuration node) {
     token(node.ifKeyword);
     space();
     token(node.leftParenthesis);
@@ -898,7 +926,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.uri);
   }
 
-  visitConstructorDeclaration(ConstructorDeclaration node) {
+  @override
+  void visitConstructorDeclaration(ConstructorDeclaration node) {
     visitMetadata(node.metadata);
 
     modifier(node.externalKeyword);
@@ -951,7 +980,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       //           super();
       space();
       if (node.initializers.length > 1) {
-        _writeText(node.parameters.parameters.last.isOptional ? " " : "  ",
+        _writeText(node.parameters.parameters.last.isOptional ? ' ' : '  ',
             node.separator.offset);
       }
 
@@ -1009,7 +1038,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endRule();
   }
 
-  visitConstructorFieldInitializer(ConstructorFieldInitializer node) {
+  @override
+  void visitConstructorFieldInitializer(ConstructorFieldInitializer node) {
     builder.nestExpression();
 
     if (!_formatter.fixes.contains(StyleFix.noThis)) {
@@ -1024,26 +1054,30 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitConstructorName(ConstructorName node) {
+  @override
+  void visitConstructorName(ConstructorName node) {
     visit(node.type);
     token(node.period);
     visit(node.name);
   }
 
-  visitContinueStatement(ContinueStatement node) {
+  @override
+  void visitContinueStatement(ContinueStatement node) {
     _simpleStatement(node, () {
       token(node.continueKeyword);
       visit(node.label, before: space);
     });
   }
 
-  visitDeclaredIdentifier(DeclaredIdentifier node) {
+  @override
+  void visitDeclaredIdentifier(DeclaredIdentifier node) {
     modifier(node.keyword);
     visit(node.type, after: space);
     visit(node.identifier);
   }
 
-  visitDefaultFormalParameter(DefaultFormalParameter node) {
+  @override
+  void visitDefaultFormalParameter(DefaultFormalParameter node) {
     visit(node.parameter);
     if (node.separator != null) {
       builder.startSpan();
@@ -1053,7 +1087,7 @@ class SourceVisitor extends ThrowingAstVisitor {
         // Change the separator to "=".
         space();
         writePrecedingCommentsAndNewlines(node.separator);
-        _writeText("=", node.separator.offset);
+        _writeText('=', node.separator.offset);
       } else {
         // The '=' separator is preceded by a space, ":" is not.
         if (node.separator.type == TokenType.EQ) space();
@@ -1068,7 +1102,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitDoStatement(DoStatement node) {
+  @override
+  void visitDoStatement(DoStatement node) {
     builder.nestExpression();
     token(node.doKeyword);
     space();
@@ -1087,7 +1122,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitDottedName(DottedName node) {
+  @override
+  void visitDottedName(DottedName node) {
     for (var component in node.components) {
       // Write the preceding ".".
       if (component != node.components.first) {
@@ -1098,24 +1134,29 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitDoubleLiteral(DoubleLiteral node) {
+  @override
+  void visitDoubleLiteral(DoubleLiteral node) {
     token(node.literal);
   }
 
-  visitEmptyFunctionBody(EmptyFunctionBody node) {
+  @override
+  void visitEmptyFunctionBody(EmptyFunctionBody node) {
     token(node.semicolon);
   }
 
-  visitEmptyStatement(EmptyStatement node) {
+  @override
+  void visitEmptyStatement(EmptyStatement node) {
     token(node.semicolon);
   }
 
-  visitEnumConstantDeclaration(EnumConstantDeclaration node) {
+  @override
+  void visitEnumConstantDeclaration(EnumConstantDeclaration node) {
     visitMetadata(node.metadata);
     visit(node.name);
   }
 
-  visitEnumDeclaration(EnumDeclaration node) {
+  @override
+  void visitEnumDeclaration(EnumDeclaration node) {
     visitMetadata(node.metadata);
 
     token(node.enumKeyword);
@@ -1134,7 +1175,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _endBody(node.rightBracket, space: true);
   }
 
-  visitExportDirective(ExportDirective node) {
+  @override
+  void visitExportDirective(ExportDirective node) {
     _visitDirectiveMetadata(node);
     _simpleStatement(node, () {
       token(node.keyword);
@@ -1149,7 +1191,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitExpressionFunctionBody(ExpressionFunctionBody node) {
+  @override
+  void visitExpressionFunctionBody(ExpressionFunctionBody node) {
     // Space after the parameter list.
     space();
 
@@ -1191,19 +1234,204 @@ class SourceVisitor extends ThrowingAstVisitor {
     token(node.semicolon);
   }
 
-  visitExpressionStatement(ExpressionStatement node) {
+  /// A period (`.`) token constructed to replace the given [operator].
+  ///
+  /// Offset, comments, and previous/next links are all preserved.
+  static Token _period(Token operator) =>
+      Token(TokenType.PERIOD, operator.offset, operator.precedingComments)
+        ..previous = operator.previous
+        ..next = operator.next;
+
+  static Expression _realTargetOf(Expression expression) {
+    if (expression is PropertyAccess) {
+      return expression.realTarget;
+    } else if (expression is MethodInvocation) {
+      return expression.realTarget;
+    } else if (expression is IndexExpression) {
+      return expression.realTarget;
+    }
+    throw UnimplementedError('Unhandled ${expression.runtimeType}'
+        '($expression)');
+  }
+
+  /// Recursively insert [cascadeTarget] (the LHS of the cascade) into the
+  /// LHS of the assignment expression that used to be the cascade's RHS.
+  static Expression _insertCascadeTargetIntoExpression(
+      Expression expression, Expression cascadeTarget) {
+    // Base case: We've recursed as deep as possible.
+    if (expression == cascadeTarget) return cascadeTarget;
+
+    // Otherwise, copy `expression` and recurse into its LHS.
+    var expressionTarget = _realTargetOf(expression);
+    if (expression is PropertyAccess) {
+      return astFactory.propertyAccess(
+          _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
+          // If we've reached the end, replace the `..` operator with `.`
+          expressionTarget == cascadeTarget
+              ? _period(expression.operator)
+              : expression.operator,
+          expression.propertyName);
+    } else if (expression is MethodInvocation) {
+      return astFactory.methodInvocation(
+          _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
+          // If we've reached the end, replace the `..` operator with `.`
+          expressionTarget == cascadeTarget
+              ? _period(expression.operator)
+              : expression.operator,
+          expression.methodName,
+          expression.typeArguments,
+          expression.argumentList);
+    } else if (expression is IndexExpression) {
+      return astFactory.indexExpressionForTarget(
+          _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
+          expression.leftBracket,
+          expression.index,
+          expression.rightBracket);
+    }
+    throw UnimplementedError('Unhandled ${expression.runtimeType}'
+        '($expression)');
+  }
+
+  /// Parenthesize the target of the given statement's expression (assumed to
+  /// be a CascadeExpression) before removing the cascade.
+  void _fixCascadeByParenthesizingTarget(ExpressionStatement statement) {
+    CascadeExpression cascade = statement.expression;
+    assert(cascade.cascadeSections.length == 1);
+
+    // Write any leading comments and whitespace immediately, as they should
+    // precede the new opening parenthesis, but then prevent them from being
+    // written again after the parenthesis.
+    writePrecedingCommentsAndNewlines(cascade.target.beginToken);
+    _suppressPrecedingCommentsAndNewLines.add(cascade.target.beginToken);
+
+    var newTarget = astFactory.parenthesizedExpression(
+        Token(TokenType.OPEN_PAREN, 0)
+          ..previous = statement.beginToken.previous
+          ..next = cascade.target.beginToken,
+        cascade.target,
+        Token(TokenType.CLOSE_PAREN, 0)
+          ..previous = cascade.target.endToken
+          ..next = statement.semicolon);
+
+    // Finally, we can revisit a clone of this ExpressionStatement to actually
+    // remove the cascade.
+    visit(astFactory.expressionStatement(
+        astFactory.cascadeExpression(newTarget, cascade.cascadeSections),
+        statement.semicolon));
+  }
+
+  void _removeCascade(ExpressionStatement statement) {
+    var cascade = statement.expression as CascadeExpression;
+    var subexpression = cascade.cascadeSections.single;
+    builder.nestExpression();
+
+    if (subexpression is AssignmentExpression) {
+      // CascadeExpression("leftHandSide", "..",
+      //     AssignmentExpression("target", "=", "rightHandSide"))
+      //
+      // transforms to
+      //
+      // AssignmentExpression(
+      //     PropertyAccess("leftHandSide", ".", "target"),
+      //     "=",
+      //     "rightHandSide")
+      visit(astFactory.assignmentExpression(
+          _insertCascadeTargetIntoExpression(
+              subexpression.leftHandSide, cascade.target),
+          subexpression.operator,
+          subexpression.rightHandSide));
+    } else if (subexpression is MethodInvocation ||
+        subexpression is PropertyAccess) {
+      // CascadeExpression("leftHandSide", "..",
+      //     MethodInvocation("target", ".", "methodName", ...))
+      //
+      // transforms to
+      //
+      // MethodInvocation(
+      //     PropertyAccess("leftHandSide", ".", "target"),
+      //     ".",
+      //     "methodName", ...)
+      //
+      // And similarly for PropertyAccess expressions.
+      visit(_insertCascadeTargetIntoExpression(subexpression, cascade.target));
+    } else {
+      throw UnsupportedError(
+          '--fix-single-cascade-statements: subexpression of cascade '
+          '"$cascade" has unsupported type ${subexpression.runtimeType}.');
+    }
+
+    token(statement.semicolon);
+    builder.unnest();
+  }
+
+  /// Remove any unnecessary single cascade from the given expression statement,
+  /// which is assumed to contain a [CascadeExpression].
+  ///
+  /// Returns true after applying the fix, which involves visiting the nested
+  /// expression. Callers must visit the nested expression themselves
+  /// if-and-only-if this method returns false.
+  bool _fixSingleCascadeStatement(ExpressionStatement statement) {
+    var cascade = statement.expression as CascadeExpression;
+    if (cascade.cascadeSections.length != 1) return false;
+
+    var target = cascade.target;
+    if (target is AsExpression ||
+        target is AwaitExpression ||
+        target is BinaryExpression ||
+        target is ConditionalExpression ||
+        target is IsExpression ||
+        target is PostfixExpression ||
+        target is PrefixExpression) {
+      // In these cases, the cascade target needs to be parenthesized before
+      // removing the cascade, otherwise the semantics will change.
+      _fixCascadeByParenthesizingTarget(statement);
+      return true;
+    } else if (target is BooleanLiteral ||
+        target is FunctionExpression ||
+        target is IndexExpression ||
+        target is InstanceCreationExpression ||
+        target is IntegerLiteral ||
+        target is ListLiteral ||
+        target is NullLiteral ||
+        target is MethodInvocation ||
+        target is ParenthesizedExpression ||
+        target is PrefixedIdentifier ||
+        target is PropertyAccess ||
+        target is SimpleIdentifier ||
+        target is StringLiteral ||
+        target is ThisExpression) {
+      // OK to simply remove the cascade.
+      _removeCascade(statement);
+      return true;
+    } else {
+      // If we get here, some new syntax was added to the language that the fix
+      // does not yet support. Leave it as is.
+      return false;
+    }
+  }
+
+  @override
+  void visitExpressionStatement(ExpressionStatement node) {
+    if (_formatter.fixes.contains(StyleFix.singleCascadeStatements) &&
+        node.expression is CascadeExpression &&
+        _fixSingleCascadeStatement(node)) {
+      return;
+    }
+
     _simpleStatement(node, () {
       visit(node.expression);
     });
   }
 
-  visitExtendsClause(ExtendsClause node) {
+  @override
+  void visitExtendsClause(ExtendsClause node) {
     soloSplit();
     token(node.extendsKeyword);
     space();
     visit(node.superclass);
   }
 
+  @override
   void visitExtensionDeclaration(ExtensionDeclaration node) {
     visitMetadata(node.metadata);
 
@@ -1230,7 +1458,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _endBody(node.rightBracket);
   }
 
-  visitFieldDeclaration(FieldDeclaration node) {
+  @override
+  void visitFieldDeclaration(FieldDeclaration node) {
     visitMetadata(node.metadata);
 
     _simpleStatement(node, () {
@@ -1240,7 +1469,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitFieldFormalParameter(FieldFormalParameter node) {
+  @override
+  void visitFieldFormalParameter(FieldFormalParameter node) {
     visitParameterMetadata(node.metadata, () {
       _beginFormalParameter(node);
       token(node.keyword, after: space);
@@ -1268,7 +1498,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     return false;
   }
 
-  visitFormalParameterList(FormalParameterList node,
+  @override
+  void visitFormalParameterList(FormalParameterList node,
       {bool nestExpression = true}) {
     if (f(node)) {
       print('test');
@@ -1438,6 +1669,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (nestExpression) builder.unnest();
   }
 
+  @override
   void visitForElement(ForElement node) {
     // Treat a spread of a collection literal like a block in a for statement
     // and don't split after the for parts.
@@ -1477,7 +1709,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endRule();
   }
 
-  visitForStatement(ForStatement node) {
+  @override
+  void visitForStatement(ForStatement node) {
     builder.nestExpression();
     token(node.awaitKeyword, after: space);
     token(node.forKeyword);
@@ -1495,7 +1728,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _visitLoopBody(node.body);
   }
 
-  visitForEachPartsWithDeclaration(ForEachPartsWithDeclaration node) {
+  @override
+  void visitForEachPartsWithDeclaration(ForEachPartsWithDeclaration node) {
     // TODO(rnystrom): The formatting logic here is slightly different from
     // how parameter metadata is handled and from how variable metadata is
     // handled. I think what it does works better in the context of a for-in
@@ -1540,12 +1774,14 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.iterable);
   }
 
-  visitForEachPartsWithIdentifier(ForEachPartsWithIdentifier node) {
+  @override
+  void visitForEachPartsWithIdentifier(ForEachPartsWithIdentifier node) {
     visit(node.identifier);
     _visitForEachPartsFromIn(node);
   }
 
-  visitForPartsWithDeclarations(ForPartsWithDeclarations node) {
+  @override
+  void visitForPartsWithDeclarations(ForPartsWithDeclarations node) {
     // Nest split variables more so they aren't at the same level
     // as the rest of the loop clauses.
     builder.nestExpression();
@@ -1568,7 +1804,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _visitForPartsFromLeftSeparator(node);
   }
 
-  visitForPartsWithExpression(ForPartsWithExpression node) {
+  @override
+  void visitForPartsWithExpression(ForPartsWithExpression node) {
     visit(node.initialization);
     _visitForPartsFromLeftSeparator(node);
   }
@@ -1594,11 +1831,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitFunctionDeclaration(FunctionDeclaration node) {
+  @override
+  void visitFunctionDeclaration(FunctionDeclaration node) {
     _visitMemberDeclaration(node, node.functionExpression);
   }
 
-  visitFunctionDeclarationStatement(FunctionDeclarationStatement node) {
+  @override
+  void visitFunctionDeclarationStatement(FunctionDeclarationStatement node) {
     visit(node.functionDeclaration);
   }
 
@@ -1612,7 +1851,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     return false;
   }
 
-  visitFunctionExpression(FunctionExpression node) {
+  @override
+  void visitFunctionExpression(FunctionExpression node) {
     bool shouldAddParens = _shouldAddParensToFunctionExpression(node);
     
     if (_formatter.fixes.contains(StyleFix.sortProps) && shouldAddParens) {
@@ -1645,7 +1885,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitFunctionExpressionInvocation(FunctionExpressionInvocation node) {
+  @override
+  void visitFunctionExpressionInvocation(FunctionExpressionInvocation node) {
     // Try to keep the entire invocation one line.
     builder.startSpan();
     builder.nestExpression();
@@ -1658,7 +1899,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitFunctionTypeAlias(FunctionTypeAlias node) {
+  @override
+  void visitFunctionTypeAlias(FunctionTypeAlias node) {
     visitMetadata(node.metadata);
 
     if (_formatter.fixes.contains(StyleFix.functionTypedefs)) {
@@ -1688,7 +1930,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitFunctionTypedFormalParameter(FunctionTypedFormalParameter node) {
+  @override
+  void visitFunctionTypedFormalParameter(FunctionTypedFormalParameter node) {
     visitParameterMetadata(node.metadata, () {
       if (!_insideNewTypedefFix) {
         modifier(node.requiredKeyword);
@@ -1712,13 +1955,15 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitGenericFunctionType(GenericFunctionType node) {
+  @override
+  void visitGenericFunctionType(GenericFunctionType node) {
     _visitGenericFunctionType(node.returnType, node.functionKeyword, null,
         node.typeParameters, node.parameters);
     token(node.question);
   }
 
-  visitGenericTypeAlias(GenericTypeAlias node) {
+  @override
+  void visitGenericTypeAlias(GenericTypeAlias node) {
     visitNodes(node.metadata, between: newline, after: newline);
     _simpleStatement(node, () {
       _visitGenericTypeAliasHeader(node.typedefKeyword, node.name,
@@ -1730,10 +1975,12 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitHideCombinator(HideCombinator node) {
+  @override
+  void visitHideCombinator(HideCombinator node) {
     _visitCombinator(node.keyword, node.hiddenNames);
   }
 
+  @override
   void visitIfElement(IfElement node) {
     // Treat a chain of if-else elements as a single unit so that we don't
     // unnecessarily indent each subsequent section of the chain.
@@ -1785,7 +2032,8 @@ class SourceVisitor extends ThrowingAstVisitor {
       beforeBlock(elseSpreadBracket, spreadRule, null);
     }
 
-    visitChild(CollectionElement element, CollectionElement child) {
+    @override
+    void visitChild(CollectionElement element, CollectionElement child) {
       builder.nestExpression(indent: 2, now: true);
 
       // Treat a spread of a collection literal like a block in an if statement
@@ -1846,7 +2094,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endRule();
   }
 
-  visitIfStatement(IfStatement node) {
+  @override
+  void visitIfStatement(IfStatement node) {
     builder.nestExpression();
     token(node.ifKeyword);
     space();
@@ -1855,7 +2104,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     token(node.rightParenthesis);
     builder.unnest();
 
-    visitClause(Statement clause) {
+    @override
+    void visitClause(Statement clause) {
       if (clause is Block || clause is IfStatement) {
         space();
         visit(clause);
@@ -1898,11 +2148,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitImplementsClause(ImplementsClause node) {
+  @override
+  void visitImplementsClause(ImplementsClause node) {
     _visitCombinator(node.implementsKeyword, node.interfaces);
   }
 
-  visitImportDirective(ImportDirective node) {
+  @override
+  void visitImportDirective(ImportDirective node) {
     if (_formatter.fixes.contains(StyleFix.sortImports)) {
       return _visitSortedImportDirectives(node);
     }
@@ -2025,7 +2277,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitIndexExpression(IndexExpression node) {
+  @override
+  void visitIndexExpression(IndexExpression node) {
     builder.nestExpression();
 
     if (node.isCascaded) {
@@ -2060,7 +2313,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitInstanceCreationExpression(InstanceCreationExpression node) {
+  @override
+  void visitInstanceCreationExpression(InstanceCreationExpression node) {
     builder.startSpan();
 
     var includeKeyword = true;
@@ -2102,11 +2356,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitIntegerLiteral(IntegerLiteral node) {
+  @override
+  void visitIntegerLiteral(IntegerLiteral node) {
     token(node.literal);
   }
 
-  visitInterpolationExpression(InterpolationExpression node) {
+  @override
+  void visitInterpolationExpression(InterpolationExpression node) {
     builder.preventSplit();
     token(node.leftBracket);
     builder.startSpan();
@@ -2116,7 +2372,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endPreventSplit();
   }
 
-  visitInterpolationString(InterpolationString node) {
+  @override
+  void visitInterpolationString(InterpolationString node) {
     StringInterpolation parent = node.parent;
 
     if (_formatter.fixes.contains(StyleFix.preferSingleQuotes)) {
@@ -2139,7 +2396,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _writeStringLiteral(node.contents);
   }
 
-  visitIsExpression(IsExpression node) {
+  @override
+  void visitIsExpression(IsExpression node) {
     builder.startSpan();
     builder.nestExpression();
     visit(node.expression);
@@ -2152,17 +2410,20 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitLabel(Label node) {
+  @override
+  void visitLabel(Label node) {
     visit(node.label);
     token(node.colon);
   }
 
-  visitLabeledStatement(LabeledStatement node) {
+  @override
+  void visitLabeledStatement(LabeledStatement node) {
     _visitLabels(node.labels);
     visit(node.statement);
   }
 
-  visitLibraryDirective(LibraryDirective node) {
+  @override
+  void visitLibraryDirective(LibraryDirective node) {
     _visitDirectiveMetadata(node);
     _simpleStatement(node, () {
       token(node.keyword);
@@ -2171,7 +2432,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitLibraryIdentifier(LibraryIdentifier node) {
+  @override
+  void visitLibraryIdentifier(LibraryIdentifier node) {
     visit(node.components.first);
     for (var component in node.components.skip(1)) {
       token(component.beginToken.previous); // "."
@@ -2179,7 +2441,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitListLiteral(ListLiteral node) {
+  @override
+  void visitListLiteral(ListLiteral node) {
     // Corner case: Splitting inside a list looks bad if there's only one
     // element, so make those more costly.
     var cost = node.elements.length <= 1 ? Cost.singleElementList : Cost.normal;
@@ -2187,7 +2450,8 @@ class SourceVisitor extends ThrowingAstVisitor {
         node, node.leftBracket, node.elements, node.rightBracket, cost);
   }
 
-  visitMapLiteralEntry(MapLiteralEntry node) {
+  @override
+  void visitMapLiteralEntry(MapLiteralEntry node) {
     builder.nestExpression();
     visit(node.key);
     token(node.separator);
@@ -2196,11 +2460,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unnest();
   }
 
-  visitMethodDeclaration(MethodDeclaration node) {
+  @override
+  void visitMethodDeclaration(MethodDeclaration node) {
     _visitMemberDeclaration(node, node);
   }
 
-  visitMethodInvocation(MethodInvocation node) {
+  @override
+  void visitMethodInvocation(MethodInvocation node) {
     final stringified = node.argumentList.arguments.isNotEmpty ? node.argumentList.arguments.first.toString() : '';
 
     // prefer_iterable_whereType
@@ -2340,7 +2606,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     return false;
   }
 
-  visitMixinDeclaration(MixinDeclaration node) {
+  @override
+  void visitMixinDeclaration(MixinDeclaration node) {
     visitMetadata(node.metadata);
 
     builder.nestExpression();
@@ -2379,16 +2646,19 @@ class SourceVisitor extends ThrowingAstVisitor {
     _endBody(node.rightBracket);
   }
 
-  visitNamedExpression(NamedExpression node) {
+  @override
+  void visitNamedExpression(NamedExpression node) {
     visitNamedArgument(node);
   }
 
-  visitNativeClause(NativeClause node) {
+  @override
+  void visitNativeClause(NativeClause node) {
     token(node.nativeKeyword);
     visit(node.name, before: space);
   }
 
-  visitNativeFunctionBody(NativeFunctionBody node) {
+  @override
+  void visitNativeFunctionBody(NativeFunctionBody node) {
     _simpleStatement(node, () {
       builder.nestExpression(now: true);
       soloSplit();
@@ -2398,14 +2668,17 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitNullLiteral(NullLiteral node) {
+  @override
+  void visitNullLiteral(NullLiteral node) {
     token(node.literal);
   }
 
-  visitOnClause(OnClause node) {
+  @override
+  void visitOnClause(OnClause node) {
     _visitCombinator(node.onKeyword, node.superclassConstraints);
   }
 
+  @override
   void visitParenthesizedExpression(ParenthesizedExpression node) {
     if (_formatter.fixes.contains(StyleFix.unnecessaryParenthesis) && !_areParenthesisNecessary(node)) {
       builder.nestExpression();
@@ -2531,7 +2804,8 @@ class SourceVisitor extends ThrowingAstVisitor {
       // `-(new List(3).length.bitLength.bitLength)`.
       (node is PropertyAccess && _expressionStartsWithWhitespace(node.target));
 
-  visitPartDirective(PartDirective node) {
+  @override
+  void visitPartDirective(PartDirective node) {
     _visitDirectiveMetadata(node);
     _simpleStatement(node, () {
       token(node.keyword);
@@ -2540,7 +2814,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitPartOfDirective(PartOfDirective node) {
+  @override
+  void visitPartOfDirective(PartOfDirective node) {
     _visitDirectiveMetadata(node);
     _simpleStatement(node, () {
       token(node.keyword);
@@ -2555,30 +2830,34 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitPostfixExpression(PostfixExpression node) {
+  @override
+  void visitPostfixExpression(PostfixExpression node) {
     visit(node.operand);
     token(node.operator);
   }
 
-  visitPrefixedIdentifier(PrefixedIdentifier node) {
+  @override
+  void visitPrefixedIdentifier(PrefixedIdentifier node) {
     CallChainVisitor(this, node).visit();
   }
 
-  visitPrefixExpression(PrefixExpression node) {
+  @override
+  void visitPrefixExpression(PrefixExpression node) {
     token(node.operator);
 
     // Edge case: put a space after "-" if the operand is "-" or "--" so we
     // don't merge the operators.
     var operand = node.operand;
     if (operand is PrefixExpression &&
-        (operand.operator.lexeme == "-" || operand.operator.lexeme == "--")) {
+        (operand.operator.lexeme == '-' || operand.operator.lexeme == '--')) {
       space();
     }
 
     visit(node.operand);
   }
 
-  visitPropertyAccess(PropertyAccess node) {
+  @override
+  void visitPropertyAccess(PropertyAccess node) {
     if (node.isCascaded) {
       token(node.operator);
       visit(node.propertyName);
@@ -2588,7 +2867,9 @@ class SourceVisitor extends ThrowingAstVisitor {
     CallChainVisitor(this, node).visit();
   }
 
-  visitRedirectingConstructorInvocation(RedirectingConstructorInvocation node) {
+  @override
+  void visitRedirectingConstructorInvocation(
+      RedirectingConstructorInvocation node) {
     builder.startSpan();
 
     token(node.thisKeyword);
@@ -2599,18 +2880,21 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitRethrowExpression(RethrowExpression node) {
+  @override
+  void visitRethrowExpression(RethrowExpression node) {
     token(node.rethrowKeyword);
   }
 
-  visitReturnStatement(ReturnStatement node) {
+  @override
+  void visitReturnStatement(ReturnStatement node) {
     _simpleStatement(node, () {
       token(node.returnKeyword);
       visit(node.expression, before: space);
     });
   }
 
-  visitScriptTag(ScriptTag node) {
+  @override
+  void visitScriptTag(ScriptTag node) {
     // The lexeme includes the trailing newline. Strip it off since the
     // formatter ensures it gets a newline after it. Since the script tag must
     // come at the top of the file, we don't have to worry about preceding
@@ -2619,32 +2903,46 @@ class SourceVisitor extends ThrowingAstVisitor {
     newline();
   }
 
-  visitSetOrMapLiteral(SetOrMapLiteral node) {
+  @override
+  void visitSetOrMapLiteral(SetOrMapLiteral node) {
     _visitCollectionLiteral(
         node, node.leftBracket, node.elements, node.rightBracket);
   }
 
-  visitShowCombinator(ShowCombinator node) {
+  @override
+  void visitShowCombinator(ShowCombinator node) {
     _visitCombinator(node.keyword, node.shownNames);
   }
 
-  visitSimpleFormalParameter(SimpleFormalParameter node) {
+  @override
+  void visitSimpleFormalParameter(SimpleFormalParameter node) {
     visitParameterMetadata(node.metadata, () {
       _beginFormalParameter(node);
 
-      modifier(node.keyword);
       var hasType = node.type != null;
       if (_insideNewTypedefFix && !hasType) {
+        // Parameters can use "var" instead of "dynamic". Since we are inserting
+        // "dynamic" in that case, remove the "var".
+        if (node.keyword != null) {
+          if (node.keyword.type != Keyword.VAR) {
+            modifier(node.keyword);
+          } else {
+            // Keep any comment attached to "var".
+            writePrecedingCommentsAndNewlines(node.keyword);
+          }
+        }
+
         // In function declarations and the old typedef syntax, you can have a
         // parameter name without a type. In the new syntax, you can have a type
         // without a name. Add "dynamic" in that case.
 
         // Ensure comments on the identifier comes before the inserted type.
         token(node.identifier.token, before: () {
-          _writeText("dynamic", node.identifier.offset);
+          _writeText('dynamic', node.identifier.offset);
           split();
         });
       } else {
+        modifier(node.keyword);
         visit(node.type);
 
         if (hasType && node.identifier != null) split();
@@ -2656,11 +2954,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitSimpleIdentifier(SimpleIdentifier node) {
+  @override
+  void visitSimpleIdentifier(SimpleIdentifier node) {
     token(node.token);
   }
 
-  visitSimpleStringLiteral(SimpleStringLiteral node) {
+  @override
+  void visitSimpleStringLiteral(SimpleStringLiteral node) {
     // logic for this inspired by:
     // https://github.com/thosakwe/dart2_dev59/blob/2d30eb2bfe7c27c6ecf6f9dcae21cc1d55218c14/pkg/analysis_server/lib/src/services/correction/assist_internal.dart#L2929
     // TODO: use https://github.com/dart-lang/linter/blob/a14d0e1104dd48b1d383add1a08aba5b532ef6a6/lib/src/rules/prefer_single_quotes.dart instead
@@ -2677,18 +2977,21 @@ class SourceVisitor extends ThrowingAstVisitor {
     );
   }
 
-  visitSpreadElement(SpreadElement node) {
+  @override
+  void visitSpreadElement(SpreadElement node) {
     token(node.spreadOperator);
     visit(node.expression);
   }
 
-  visitStringInterpolation(StringInterpolation node) {
+  @override
+  void visitStringInterpolation(StringInterpolation node) {
     for (var element in node.elements) {
       visit(element);
     }
   }
 
-  visitSuperConstructorInvocation(SuperConstructorInvocation node) {
+  @override
+  void visitSuperConstructorInvocation(SuperConstructorInvocation node) {
     builder.startSpan();
 
     token(node.superKeyword);
@@ -2699,11 +3002,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endSpan();
   }
 
-  visitSuperExpression(SuperExpression node) {
+  @override
+  void visitSuperExpression(SuperExpression node) {
     token(node.superKeyword);
   }
 
-  visitSwitchCase(SwitchCase node) {
+  @override
+  void visitSwitchCase(SwitchCase node) {
     _visitLabels(node.labels);
     token(node.keyword);
     space();
@@ -2718,7 +3023,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unindent();
   }
 
-  visitSwitchDefault(SwitchDefault node) {
+  @override
+  void visitSwitchDefault(SwitchDefault node) {
     _visitLabels(node.labels);
     token(node.keyword);
     token(node.colon);
@@ -2731,7 +3037,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.unindent();
   }
 
-  visitSwitchStatement(SwitchStatement node) {
+  @override
+  void visitSwitchStatement(SwitchStatement node) {
     builder.nestExpression();
     token(node.switchKeyword);
     space();
@@ -2752,7 +3059,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitSymbolLiteral(SymbolLiteral node) {
+  @override
+  void visitSymbolLiteral(SymbolLiteral node) {
     token(node.poundSign);
     var components = node.components;
     for (var component in components) {
@@ -2764,17 +3072,20 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
   }
 
-  visitThisExpression(ThisExpression node) {
+  @override
+  void visitThisExpression(ThisExpression node) {
     token(node.thisKeyword);
   }
 
-  visitThrowExpression(ThrowExpression node) {
+  @override
+  void visitThrowExpression(ThrowExpression node) {
     token(node.throwKeyword);
     space();
     visit(node.expression);
   }
 
-  visitTopLevelVariableDeclaration(TopLevelVariableDeclaration node) {
+  @override
+  void visitTopLevelVariableDeclaration(TopLevelVariableDeclaration node) {
     visitMetadata(node.metadata);
 
     _simpleStatement(node, () {
@@ -2782,7 +3093,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitTryStatement(TryStatement node) {
+  @override
+  void visitTryStatement(TryStatement node) {
     token(node.tryKeyword);
     space();
     visit(node.body);
@@ -2791,11 +3103,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.finallyBlock);
   }
 
-  visitTypeArgumentList(TypeArgumentList node) {
+  @override
+  void visitTypeArgumentList(TypeArgumentList node) {
     _visitGenericList(node.leftBracket, node.rightBracket, node.arguments);
   }
 
-  visitTypeName(TypeName node) {
+  @override
+  void visitTypeName(TypeName node) {
     if (_formatter.fixes.contains(StyleFix.preferVoidToNull) && _isNull(node)) {
       if ((node.typeArguments?.arguments?.isNotEmpty ?? false) && node.typeArguments.arguments.first.toString().contains('Null')) {
         visit(node.name);
@@ -2849,7 +3163,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     return true;
   }
 
-  visitTypeParameter(TypeParameter node) {
+  @override
+  void visitTypeParameter(TypeParameter node) {
     visitParameterMetadata(node.metadata, () {
       visit(node.name);
       token(node.extendsKeyword, before: space, after: space);
@@ -2857,7 +3172,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     });
   }
 
-  visitTypeParameterList(TypeParameterList node) {
+  @override
+  void visitTypeParameterList(TypeParameterList node) {
     _metadataRules.add(MetadataRule());
 
     _visitGenericList(node.leftBracket, node.rightBracket, node.typeParameters);
@@ -2865,7 +3181,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _metadataRules.removeLast();
   }
 
-  visitVariableDeclaration(VariableDeclaration node) {
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
     visit(node.name);
     if (node.initializer == null) return;
 
@@ -2889,7 +3206,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     _visitAssignment(node.equals, node.initializer, nest: hasMultipleVariables);
   }
 
-  visitVariableDeclarationList(VariableDeclarationList node) {
+  @override
+  void visitVariableDeclarationList(VariableDeclarationList node) {
     visitMetadata(node.metadata);
 
     // Allow but try to avoid splitting between the type and name.
@@ -2914,13 +3232,15 @@ class SourceVisitor extends ThrowingAstVisitor {
     _endPossibleConstContext(node.keyword);
   }
 
-  visitVariableDeclarationStatement(VariableDeclarationStatement node) {
+  @override
+  void visitVariableDeclarationStatement(VariableDeclarationStatement node) {
     _simpleStatement(node, () {
       visit(node.variables);
     });
   }
 
-  visitWhileStatement(WhileStatement node) {
+  @override
+  void visitWhileStatement(WhileStatement node) {
     builder.nestExpression();
     token(node.whileKeyword);
     space();
@@ -2933,11 +3253,13 @@ class SourceVisitor extends ThrowingAstVisitor {
     _visitLoopBody(node.body);
   }
 
-  visitWithClause(WithClause node) {
+  @override
+  void visitWithClause(WithClause node) {
     _visitCombinator(node.withKeyword, node.mixinTypes);
   }
 
-  visitYieldStatement(YieldStatement node) {
+  @override
+  void visitYieldStatement(YieldStatement node) {
     _simpleStatement(node, () {
       token(node.yieldKeyword);
       token(node.star);
@@ -2948,7 +3270,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Visit a [node], and if not null, optionally preceded or followed by the
   /// specified functions.
-  void visit(AstNode node, {void before(), void after()}) {
+  void visit(AstNode node, {void Function() before, void Function() after}) {
     if (node == null) return;
 
     if (before != null) before();
@@ -2984,7 +3306,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Unlike other annotations, these are allowed to stay on the same line as
   /// the parameter.
   void visitParameterMetadata(
-      NodeList<Annotation> metadata, void visitParameter()) {
+      NodeList<Annotation> metadata, void Function() visitParameter) {
     if (metadata == null || metadata.isEmpty) {
       visitParameter();
       return;
@@ -3167,7 +3489,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// If [beforeBody] is provided, it is invoked before the body is visited.
   void _visitBody(TypeParameterList typeParameters,
       FormalParameterList parameters, FunctionBody body,
-      [beforeBody()]) {
+      [void Function() beforeBody]) {
     // If the body is "=>", add an extra level of indentation around the
     // parameters and a rule that spans the parameters and the "=>". This
     // ensures that if the parameters wrap, they wrap more deeply than the "=>"
@@ -3247,7 +3569,10 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Visit a list of [nodes] if not null, optionally separated and/or preceded
   /// and followed by the given functions.
-  void visitNodes(Iterable<AstNode> nodes, {before(), between(), after()}) {
+  void visitNodes(Iterable<AstNode> nodes,
+      {void Function() before,
+      void Function() between,
+      void Function() after}) {
     if (nodes == null || nodes.isEmpty) return;
 
     if (before != null) before();
@@ -3262,10 +3587,11 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   /// Visit a comma-separated list of [nodes] if not null.
-  void visitCommaSeparatedNodes(Iterable<AstNode> nodes, {between()}) {
+  void visitCommaSeparatedNodes(Iterable<AstNode> nodes,
+      {void Function() between}) {
     if (nodes == null || nodes.isEmpty) return;
 
-    if (between == null) between = space;
+    between ??= space;
 
     var first = true;
     for (var node in nodes) {
@@ -3275,7 +3601,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       visit(node);
 
       // The comma after the node.
-      if (node.endToken.next.lexeme == ",") token(node.endToken.next);
+      if (node.endToken.next.lexeme == ',') token(node.endToken.next);
     }
   }
 
@@ -3479,7 +3805,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (functionKeyword != null) {
       token(functionKeyword);
     } else {
-      _writeText("Function", functionKeywordPosition);
+      _writeText('Function', functionKeywordPosition);
     }
 
     builder.unnest();
@@ -3510,7 +3836,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (equals != null) {
       token(equals);
     } else {
-      _writeText("=", equalsPosition);
+      _writeText('=', equalsPosition);
     }
 
     builder.endRule();
@@ -3597,7 +3923,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// This only looks for comments at the element boundary. Comments within an
   /// element are ignored.
   bool _containsLineComments(Iterable<AstNode> elements, Token rightBracket) {
-    hasLineCommentBefore(token) {
+    bool hasLineCommentBefore(token) {
       var comment = token.precedingComments;
       for (; comment != null; comment = comment.next) {
         if (comment.type == TokenType.SINGLE_LINE_COMMENT) return true;
@@ -3650,7 +3976,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// split.
   void _endLiteralBody(Token rightBracket,
       {Rule ignoredRule, bool forceSplit}) {
-    if (forceSplit == null) forceSplit = false;
+    forceSplit ??= false;
 
     // Put comments before the closing delimiter inside the block.
     var hasLeadingNewline = writePrecedingCommentsAndNewlines(rightBracket);
@@ -3718,7 +4044,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// Handles nesting if a line break occurs in the statement and writes the
   /// terminating semicolon. Invokes [body] which should write statement itself.
-  void _simpleStatement(AstNode node, body()) {
+  void _simpleStatement(AstNode node, void Function() body) {
     builder.nestExpression();
     body();
 
@@ -3931,7 +4257,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Does nothing if [token] is `null`. If [before] is given, it will be
   /// executed before the token is outout. Likewise, [after] will be called
   /// after the token is output.
-  void token(Token token, {before(), after()}) {
+  void token(Token token, {void Function() before, void Function() after}) {
     if (token == null) return;
 
     writePrecedingCommentsAndNewlines(token);
@@ -3957,6 +4283,9 @@ class SourceVisitor extends ThrowingAstVisitor {
       return false;
     }
 
+    // If the token's comments are being moved by a fix, do not write them here.
+    if (_suppressPrecedingCommentsAndNewLines.contains(token)) return false;
+
     var previousLine = _endLine(token.previous);
     var tokenLine = _startLine(token);
 
@@ -3980,7 +4309,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       var linesBefore = commentLine - previousLine;
       var flushLeft = _startColumn(comment) == 1;
 
-      if (text.startsWith("///") && !text.startsWith("////")) {
+      if (text.startsWith('///') && !text.startsWith('////')) {
         // Line doc comments are always indented even if they were flush left.
         flushLeft = false;
 

@@ -9,7 +9,7 @@
             "program": "bin/format.dart",
             "request": "launch",
             "type": "dart",
-            "args": ["-l 120", "--fix-required-parameters-first", "examples/test.dart"]
+            "args": ["-l 120", "--fix-required-parameters-first", "--fix-null-init", "examples/test.dart"]
         }
     ]
 }

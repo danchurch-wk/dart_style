@@ -37,6 +37,8 @@ class StyleFix {
 
   static const noThis = StyleFix._('no-this', '“This” is bad, pls no');
 
+  static const nullInit = StyleFix._('null-init', 'Don\'t initialize to null');
+
 
   // WIP, don't use
 
@@ -65,6 +67,7 @@ class StyleFix {
     requiredFirst,
     noThis,
     singleCascadeStatements,
+    nullInit,
   ];
 
   final String name;

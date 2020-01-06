@@ -1079,7 +1079,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   @override
   void visitDefaultFormalParameter(DefaultFormalParameter node) {
     visit(node.parameter);
-    if (node.separator != null) {
+
+    if ((!_formatter.fixes.contains(StyleFix.nullInit) || !DartTypeUtilities.isNullLiteral(node.defaultValue)) && node.separator != null) {
       builder.startSpan();
       builder.nestExpression();
 
@@ -1502,7 +1503,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   void visitFormalParameterList(FormalParameterList node,
       {bool nestExpression = true}) {
     if (f(node)) {
-      print('test');
+      // print('test');
     }
     // Corner case: empty parameter lists.
     if (node.parameters.isEmpty) {
@@ -1517,7 +1518,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     int lineLength = 0;
     if (node.parent is ConstructorDeclaration) {
-      print('yes');
+      // print('yes');
       ConstructorDeclaration constructorDeclaration = node.parent;
       //  - (node.parent as ConstructorDeclaration).childEntities
       int initializerLength = 0;
@@ -1528,7 +1529,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       lineLength = constructorDeclaration.length - initializerLength - constructorDeclaration.body.length - 1 + builder.indentation;
     } else if (node.parent is FunctionExpression && node.parent.parent is FunctionDeclaration) {
-      print('nah');
+      // print('nah');
       // + 1 fpr {
       FunctionExpression expression = node.parent;
       FunctionDeclaration declaration = node.parent.parent;
@@ -1548,7 +1549,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     if (['([', '({'].any(node.toString().startsWith)) {
       lineLength = 0;
-      print('no');
+      // print('no');
     }
 
     bool shouldFixCommas = _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
@@ -1557,7 +1558,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       // print('Formal param $node ${node.toString().startsWith('([')}');
     }
 
-    print(':: node $node shouldFixCommas $shouldFixCommas lineLength $lineLength');
+    // print(':: node $node shouldFixCommas $shouldFixCommas lineLength $lineLength');
 
     // If the parameter list has a trailing comma, format it like a collection
     // literal where each parameter goes on its own line, they are indented +2,
@@ -1632,6 +1633,8 @@ class SourceVisitor extends ThrowingAstVisitor {
           if (!isFirstRequired && isSecondRequired) return 1;
           return 0;
         });
+
+        print(optionalParams);
 
         for (var param in sortedParams) {
           visit(param);
@@ -3203,7 +3206,9 @@ class SourceVisitor extends ThrowingAstVisitor {
     var hasMultipleVariables =
         (node.parent as VariableDeclarationList).variables.length > 1;
 
-    _visitAssignment(node.equals, node.initializer, nest: hasMultipleVariables);
+    if (!_formatter.fixes.contains(StyleFix.nullInit) || node.isConst || node.isFinal || !DartTypeUtilities.isNullLiteral(node.initializer)) {
+      _visitAssignment(node.equals, node.initializer, nest: hasMultipleVariables);
+    }
   }
 
   @override
@@ -3741,7 +3746,23 @@ class SourceVisitor extends ThrowingAstVisitor {
     // Process the parameters as a separate set of chunks.
     builder = builder.startBlock(null);
 
-    for (var parameter in parameters.parameters) {
+    final params = parameters.parameters.toList();
+
+    if (_formatter.fixes.contains(StyleFix.requiredFirst)) {
+      params.sort((i, j) {
+        if (i is! DefaultFormalParameter && j is DefaultFormalParameter) return -1;
+        if (i is DefaultFormalParameter && j is! DefaultFormalParameter) return 1;
+
+        bool isFirstRequired = i.metadata != null && i.metadata.isNotEmpty && i.metadata.first.toString() == '@required';
+        bool isSecondRequired = j.metadata != null && j.metadata.isNotEmpty && j.metadata.first.toString() == '@required';
+
+        if (isFirstRequired && !isSecondRequired) return -1;
+        if (!isFirstRequired && isSecondRequired) return 1;
+        return 0;
+      });
+    }
+
+    for (var parameter in params) {
       visit(parameter);
       _writeCommaAfter(parameter, forceComma: forceComma);
 

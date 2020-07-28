@@ -1,8 +1,23 @@
+# 1.3.6
+
+* Change the path used in error messages when reading from stdin from "<stdin>"
+  to "stdin". The former crashes on Windows since it is not a valid Windows
+  pathname. To get the old behavior, pass `--stdin-name=<stdin>`.  
+
+# 1.3.5
+
+* Restore command line output accidentally removed in 1.3.4.
+
 # 1.3.4
 
 * Add `--fix-single-cascade-statements`.
 * Correctly handle `var` in `--fix-function-typedefs` (#826).
 * Preserve leading indentation in fixed doc comments (#821).
+* Split outer nested control flow elements (#869).
+* Always place a blank line after script tags (#782).
+* Don't add unneeded splits on if elements near comments (#888).
+* Indent blocks in initializers of multiple-variable declarations.
+* Update the null-aware subscript syntax from `?.[]` to `?[]`.
 
 # 1.3.3
 

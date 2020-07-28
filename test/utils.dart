@@ -18,12 +18,59 @@ import 'package:irdartfmt/irdartfmt.dart';
 const unformattedSource = 'void  main()  =>  print("hello") ;';
 const formattedSource = 'void main() => print("hello");\n';
 
+/// The same as formatted source but without a trailing newline because
+/// [TestProcess] filters those when it strips command line output into lines.
+const formattedOutput = 'void main() => print("hello");';
+
 final _indentPattern = RegExp(r'\(indent (\d+)\)');
 final _fixPattern = RegExp(r'\(fix ([a-x-]+)\)');
 
-/// Runs the command line formatter, passing it [args].
-Future<TestProcess> runFormatter([List<String> args]) {
-  args ??= [];
+/// If tool/command_shell.dart has been compiled to a snapshot, this is the path
+/// to it.
+String _commandExecutablePath;
+
+/// If bin/format.dart has been compiled to a snapshot, this is the path to it.
+String _formatterExecutablePath;
+
+/// Compiles format.dart to a native executable for tests to use.
+///
+/// Calls [setupAll()] and [tearDownAll()] to coordinate this when the
+/// subsequent tests and to clean up the executable.
+void compileFormatterExecutable() {
+  setUpAll(() async {
+    _formatterExecutablePath = await _compileSnapshot('bin/format.dart');
+  });
+
+  tearDownAll(() async {
+    await _deleteSnapshot(_formatterExecutablePath);
+    _formatterExecutablePath = null;
+  });
+}
+
+/// Compiles command_shell.dart to a native executable for tests to use.
+///
+/// Calls [setupAll()] and [tearDownAll()] to coordinate this when the
+/// subsequent tests and to clean up the executable.
+void compileCommandExecutable() {
+  setUpAll(() async {
+    _commandExecutablePath = await _compileSnapshot('tool/command_shell.dart');
+  });
+
+  tearDownAll(() async {
+    await _deleteSnapshot(_commandExecutablePath);
+    _commandExecutablePath = null;
+  });
+}
+
+/// Compile the Dart [script] to an app-JIT snapshot.
+///
+/// We do this instead of spawning the script from source each time because it's
+/// much faster when the same script needs to be run several times.
+Future<String> _compileSnapshot(String script) async {
+  var scriptName = p.basename(script);
+  var tempDir =
+      await Directory.systemTemp.createTemp(p.withoutExtension(scriptName));
+  var snapshot = p.join(tempDir.path, '$scriptName.snapshot');
 
   // Locate the "test" directory. Use mirrors so that this works with the test
   // package, which loads this suite into an isolate.
@@ -31,30 +78,74 @@ Future<TestProcess> runFormatter([List<String> args]) {
       .findLibrary(#irdartfmt.test.utils)
       .uri
       .toFilePath());
+  var scriptPath = p.normalize(p.join(p.dirname(testDir), script));
 
-  var formatterPath = p.normalize(p.join(testDir, '../bin/format.dart'));
+  var compileResult = await Process.run(Platform.resolvedExecutable, [
+    '--snapshot-kind=app-jit',
+    '--snapshot=$snapshot',
+    scriptPath,
+    '--help'
+  ]);
 
-  args.insert(0, formatterPath);
-
-  // Use the same package root, if there is one.
-  if (Platform.packageConfig != null && Platform.packageConfig.isNotEmpty) {
-    args.insert(0, '--packages=${Platform.packageConfig}');
+  if (compileResult.exitCode != 0) {
+    fail('Could not compile $scriptName to a snapshot (exit code '
+        '${compileResult.exitCode}):\n${compileResult.stdout}\n\n'
+        '${compileResult.stderr}');
   }
 
-  return TestProcess.start(Platform.executable, args);
+  return snapshot;
+}
+
+/// Attempts to delete to temporary directory created for [snapshot] by
+/// [_compileSnapshot()].
+Future<void> _deleteSnapshot(String snapshot) async {
+  try {
+    await Directory(p.dirname(snapshot)).delete(recursive: true);
+  } on IOException {
+    // Do nothing if we failed to delete it. The OS will eventually clean it
+    // up.
+  }
+}
+
+/// Runs the command line formatter, passing it [args].
+Future<TestProcess> runFormatter([List<String> args]) {
+  if (_formatterExecutablePath == null) {
+    fail('Must call createFormatterExecutable() before running commands.');
+  }
+
+  return TestProcess.start(
+      Platform.resolvedExecutable, [_formatterExecutablePath, ...?args],
+      workingDirectory: d.sandbox);
 }
 
 /// Runs the command line formatter, passing it the test directory followed by
 /// [args].
 Future<TestProcess> runFormatterOnDir([List<String> args]) {
-  args ??= [];
-  return runFormatter([d.sandbox, ...args]);
+  return runFormatter(['.', ...?args]);
+}
+
+/// Runs the test shell for the [Command]-based formatter, passing it [args].
+Future<TestProcess> runCommand([List<String> args]) {
+  if (_commandExecutablePath == null) {
+    fail('Must call createCommandExecutable() before running commands.');
+  }
+
+  return TestProcess.start(
+      Platform.resolvedExecutable, [_commandExecutablePath, 'format', ...?args],
+      workingDirectory: d.sandbox);
+}
+
+/// Runs the test shell for the [Command]-based formatter, passing it the test
+/// directory followed by [args].
+Future<TestProcess> runCommandOnDir([List<String> args]) {
+  return runCommand(['.', ...?args]);
 }
 
 /// Run tests defined in "*.unit" and "*.stmt" files inside directory [name].
 void testDirectory(String name, [Iterable<StyleFix> fixes]) {
   // Locate the "test" directory. Use mirrors so that this works with the test
   // package, which loads this suite into an isolate.
+  // TODO(rnystrom): Investigate using Isolate.resolvePackageUri instead.
   var testDir = p.dirname(currentMirrorSystem()
       .findLibrary(#irdartfmt.test.utils)
       .uri

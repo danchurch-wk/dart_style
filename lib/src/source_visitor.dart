@@ -138,6 +138,9 @@ class SourceVisitor extends ThrowingAstVisitor {
     return false;
   }
 
+  static bool _isControlFlowElement(AstNode node) =>
+      node is IfElement || node is ForElement;
+
   /// The builder for the block that is currently being visited.
   ChunkBuilder builder;
 
@@ -1235,11 +1238,11 @@ class SourceVisitor extends ThrowingAstVisitor {
     token(node.semicolon);
   }
 
-  /// A period (`.`) token constructed to replace the given [operator].
+  /// Synthesize a token with [type] to replace the given [operator].
   ///
   /// Offset, comments, and previous/next links are all preserved.
-  static Token _period(Token operator) =>
-      Token(TokenType.PERIOD, operator.offset, operator.precedingComments)
+  static Token _synthesizeToken(TokenType type, Token operator) =>
+      Token(type, operator.offset, operator.precedingComments)
         ..previous = operator.previous
         ..next = operator.next;
 
@@ -1269,7 +1272,7 @@ class SourceVisitor extends ThrowingAstVisitor {
           _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
           // If we've reached the end, replace the `..` operator with `.`
           expressionTarget == cascadeTarget
-              ? _period(expression.operator)
+              ? _synthesizeToken(TokenType.PERIOD, expression.operator)
               : expression.operator,
           expression.propertyName);
     } else if (expression is MethodInvocation) {
@@ -1277,17 +1280,28 @@ class SourceVisitor extends ThrowingAstVisitor {
           _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
           // If we've reached the end, replace the `..` operator with `.`
           expressionTarget == cascadeTarget
-              ? _period(expression.operator)
+              ? _synthesizeToken(TokenType.PERIOD, expression.operator)
               : expression.operator,
           expression.methodName,
           expression.typeArguments,
           expression.argumentList);
     } else if (expression is IndexExpression) {
-      return astFactory.indexExpressionForTarget(
-          _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
-          expression.leftBracket,
-          expression.index,
-          expression.rightBracket);
+      var question = expression.question;
+
+      // A null-aware cascade treats the `?` in `?..` as part of the token, but
+      // for a non-cascade index, it is a separate `?` token.
+      if (expression.period != null &&
+          expression.period.type == TokenType.QUESTION_PERIOD_PERIOD) {
+        question = _synthesizeToken(TokenType.QUESTION, expression.period);
+      }
+
+      return astFactory.indexExpressionForTarget2(
+          target: _insertCascadeTargetIntoExpression(
+              expressionTarget, cascadeTarget),
+          question: question,
+          leftBracket: expression.leftBracket,
+          index: expression.index,
+          rightBracket: expression.rightBracket);
     }
     throw UnimplementedError('Unhandled ${expression.runtimeType}'
         '($expression)');
@@ -1709,6 +1723,11 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     if (!isSpreadBody) builder.endBlockArgumentNesting();
     builder.unnest();
+
+    // If a control flow element is nested inside another, force the outer one
+    // to split.
+    if (_isControlFlowElement(node.body)) builder.forceRules();
+
     builder.endRule();
   }
 
@@ -2035,7 +2054,6 @@ class SourceVisitor extends ThrowingAstVisitor {
       beforeBlock(elseSpreadBracket, spreadRule, null);
     }
 
-    @override
     void visitChild(CollectionElement element, CollectionElement child) {
       builder.nestExpression(indent: 2, now: true);
 
@@ -2060,8 +2078,9 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // Wrap the whole thing in a single rule. If a split happens inside the
     // condition or the then clause, we want the then and else clauses to split.
-    builder.startRule();
+    builder.startLazyRule();
 
+    var hasInnerControlFlow = false;
     for (var element in ifElements) {
       // The condition.
       token(element.ifKeyword);
@@ -2071,6 +2090,9 @@ class SourceVisitor extends ThrowingAstVisitor {
       token(element.rightParenthesis);
 
       visitChild(element, element.thenElement);
+      if (_isControlFlowElement(element.thenElement)) {
+        hasInnerControlFlow = true;
+      }
 
       // Handle this element's "else" keyword and prepare to write the element,
       // but don't write it. It will either be the next element in [ifElements]
@@ -2092,8 +2114,17 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // Handle the final trailing else if there is one.
     var lastElse = ifElements.last.elseElement;
-    if (lastElse != null) visitChild(lastElse, lastElse);
+    if (lastElse != null) {
+      visitChild(lastElse, lastElse);
 
+      if (_isControlFlowElement(lastElse)) {
+        hasInnerControlFlow = true;
+      }
+    }
+
+    // If a control flow element is nested inside another, force the outer one
+    // to split.
+    if (hasInnerControlFlow) builder.forceRules();
     builder.endRule();
   }
 
@@ -2309,6 +2340,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
 
     builder.startSpan(Cost.index);
+    token(node.question);
     token(node.leftBracket);
     soloZeroSplit();
     visit(node.index);
@@ -2903,7 +2935,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     // come at the top of the file, we don't have to worry about preceding
     // comments or whitespace.
     _writeText(node.scriptTag.lexeme.trim(), node.offset);
-    newline();
+    twoNewlines();
   }
 
   @override
@@ -3231,9 +3263,16 @@ class SourceVisitor extends ThrowingAstVisitor {
     // possible, we split after *every* declaration so that each is on its own
     // line.
     builder.startRule();
-    visitCommaSeparatedNodes(node.variables, between: split);
-    builder.endRule();
 
+    // If there are multiple declarations split across lines, then we want any
+    // blocks in the initializers to indent past the variables.
+    if (node.variables.length > 1) builder.startBlockArgumentNesting();
+
+    visitCommaSeparatedNodes(node.variables, between: split);
+
+    if (node.variables.length > 1) builder.endBlockArgumentNesting();
+
+    builder.endRule();
     _endPossibleConstContext(node.keyword);
   }
 

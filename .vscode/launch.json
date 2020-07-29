@@ -9,7 +9,7 @@
             "program": "bin/format.dart",
             "request": "launch",
             "type": "dart",
-            "args": ["-l 120", "--fix-required-parameters-first", "--fix-null-init", "examples/test.dart"]
+            "args": ["-l 120", "--fix-sort-props", "--fix-null-init", "examples/sort_props.dart"]
         }
     ]
 }

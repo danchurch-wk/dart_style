@@ -1,14 +1,10 @@
-class ExtremelyVerboseClassThatDoesntReallyHaveAPoint {
-  ExtremelyVerboseClassThatDoesntReallyHaveAPoint(
-    Object objectToPrintToStandardOutput,
-    bool shouldActuallyPrintObjectToStandardOutput,
-  ) {
-    if (!shouldActuallyPrintObjectToStandardOutput) return;
+class TrailingCommaExample {
+  final int trailingCommaExampleInt;
+  final String trailingCommaExampleString;
 
-    print(objectToPrintToStandardOutput);
-  }
-}
+  const TrailingCommaExample(
+      this.trailingCommaExampleInt, this.trailingCommaExampleString);
 
-void main() {
-  ExtremelyVerboseClassThatDoesntReallyHaveAPoint('', false);
+  void trailingCommaExampleMethod(
+      int trailingCommaExampleInt, String trailingCommaExampleString) {}
 }

@@ -5,7 +5,6 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:path/path.dart' as path;
 
 import 'package:irdartfmt/src/cli/formatter_options.dart';
 import 'package:irdartfmt/src/cli/options.dart';
@@ -122,9 +121,9 @@ void main(List<String> args) {
     usageError(parser, 'Cannot pass --stdin-name when not reading from stdin.');
   }
 
-  String packageName = '';
+  var packageName = '';
   try {
-    packageName = argResults["package-name"];
+    packageName = argResults['package-name'];
   } catch (e) {
     // do nothing
   }
@@ -173,81 +172,4 @@ Example: dartfmt -w .
 
 ${parser.usage}
 ''');
-}
-
-const List<String> defaultPaths = ['lib/'];
-const List<String> defaultExclude = [];
-
-/// Returns a set of files within [paths] to be formatted, with [exclude] excluded.
-///
-/// [paths] can contain both files and directories. Files within directories
-/// will be processed recursively, ignoring symlinks.
-///
-/// If [exclude] is not empty, the return value will include [paths], expanded
-/// to all matching files. Otherwise, it will not be expanded.
-///
-/// To force expansion, set [alwaysExpand] to `true`.
-FilesToFormat getFilesToFormat({
-  List<String> paths = defaultPaths,
-  List<String> exclude = defaultExclude,
-  bool alwaysExpand = false,
-}) {
-  var filesToFormat = FilesToFormat();
-
-  if (exclude.isEmpty && !alwaysExpand) {
-    // If no files are excluded, we can use the paths and let the dart
-    // formatter expand the files.
-    filesToFormat.files.addAll(paths);
-  } else {
-    // Convert paths to relative paths, so they can be efficiently
-    // compared to the files we're listing.
-    paths = paths.map(path.relative).toList();
-    exclude = exclude.map(path.relative).toList();
-
-    // Build the list of files by expanding the given paths, looking for
-    // all .dart files that don't match any excluded path.
-    for (var p in paths) {
-      List<FileSystemEntity> files = FileSystemEntity.isFileSync(p)
-          ? [File(p)]
-          : Directory(p).listSync(recursive: true, followLinks: false);
-
-      for (FileSystemEntity entity in files) {
-        // Skip directories and links.
-        if (entity is! File) continue;
-        // Skip non-dart files.
-        if (!entity.path.endsWith('.dart')) continue;
-
-        var pathParts = path.split(entity.path);
-        // Skip dependency files.
-        if (pathParts.contains('packages')) continue;
-        // Skip contents of .pub directories.
-        if (pathParts.contains('.pub')) continue;
-        // Skip contents of .dart_tool directories.
-        if (pathParts.contains('.dart_tool')) continue;
-
-        // Skip excluded files.
-        bool isExcluded = exclude.any((excluded) =>
-            entity.path == excluded || path.isWithin(excluded, entity.path));
-
-        if (isExcluded) {
-          filesToFormat.excluded.add(entity.path);
-          continue;
-        }
-
-        // File should be formatted.
-        filesToFormat.files.add(entity.path);
-      }
-    }
-  }
-
-  return filesToFormat;
-}
-
-/// Data around included/excluded files, returned [getFilesToFormat].
-class FilesToFormat {
-  /// Matching/included that should be formatted.
-  List<String> files = [];
-
-  /// Excluded files that should not be formatted.
-  List<String> excluded = [];
 }

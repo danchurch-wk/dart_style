@@ -10,7 +10,6 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/standard_ast_factory.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
-import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/src/generated/source.dart';
 
 import 'argument_list_visitor.dart';
@@ -137,9 +136,6 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     return false;
   }
-
-  static bool _isControlFlowElement(AstNode node) =>
-      node is IfElement || node is ForElement;
 
   /// The builder for the block that is currently being visited.
   ChunkBuilder builder;
@@ -358,11 +354,13 @@ class SourceVisitor extends ThrowingAstVisitor {
       parentHeight = builder.indentation + node.length;
     }
 
-    if (node.parent is MethodInvocation || node.parent is InstanceCreationExpression) {
+    if (node.parent is MethodInvocation ||
+        node.parent is InstanceCreationExpression) {
       parentHeight = 0;
     }
 
-    bool shouldFixCommas = _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
+    bool shouldFixCommas =
+        _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
 
     if (shouldFixCommas && parentHeight > builder.pageWidth) {
       // print(':: node.parent ${node.parent}');
@@ -372,9 +370,10 @@ class SourceVisitor extends ThrowingAstVisitor {
     // If the argument list has a trailing comma, format it like a collection
     // literal where each argument goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (hasCommaAfter(node.arguments.last) || (shouldFixCommas && parentHeight > builder.pageWidth)) {
-      _visitCollectionLiteral(
-          null, node.leftParenthesis, node.arguments, node.rightParenthesis, null, shouldFixCommas);
+    if (hasCommaAfter(node.arguments.last) ||
+        (shouldFixCommas && parentHeight > builder.pageWidth)) {
+      _visitCollectionLiteral(null, node.leftParenthesis, node.arguments,
+          node.rightParenthesis, null, shouldFixCommas);
       return;
     }
 
@@ -656,6 +655,11 @@ class SourceVisitor extends ThrowingAstVisitor {
       visitNodes(
         node.cascadeSections.toList()
           ..sort((a, b) {
+            // if (a is MethodInvocation) {
+            //   writePrecedingCommentsAndNewlines(a.operator);
+            //   _suppressPrecedingCommentsAndNewLines.add(a.operator);
+            //   // a.operator.precedingComments.
+            // }
             // Don't sort method invocations, only properties
             if ([a, b].whereType<MethodInvocation>().isNotEmpty) return 0;
 
@@ -715,7 +719,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Whether a cascade should be allowed to be inline as opposed to one
   /// expression per line.
   bool _allowInlineCascade(CascadeExpression node) {
-    if (_formatter.fixes.contains(StyleFix.preferMultilineCascade) && node.cascadeSections.length > 1) return false;
+    if (_formatter.fixes.contains(StyleFix.preferMultilineCascade) &&
+        node.cascadeSections.length > 1) return false;
 
     // If the receiver is an expression that makes the cascade's very low
     // precedence confusing, force it to split. For example:
@@ -1049,7 +1054,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       token(node.thisKeyword);
       token(node.period);
     }
-    
+
     visit(node.fieldName);
 
     _visitAssignment(node.equals, node.expression);
@@ -1083,7 +1088,9 @@ class SourceVisitor extends ThrowingAstVisitor {
   void visitDefaultFormalParameter(DefaultFormalParameter node) {
     visit(node.parameter);
 
-    if ((!_formatter.fixes.contains(StyleFix.nullInit) || !DartTypeUtilities.isNullLiteral(node.defaultValue)) && node.separator != null) {
+    if ((!_formatter.fixes.contains(StyleFix.nullInit) ||
+            !DartTypeUtilities.isNullLiteral(node.defaultValue)) &&
+        node.separator != null) {
       builder.startSpan();
       builder.nestExpression();
 
@@ -1238,11 +1245,11 @@ class SourceVisitor extends ThrowingAstVisitor {
     token(node.semicolon);
   }
 
-  /// Synthesize a token with [type] to replace the given [operator].
+  /// A period (`.`) token constructed to replace the given [operator].
   ///
   /// Offset, comments, and previous/next links are all preserved.
-  static Token _synthesizeToken(TokenType type, Token operator) =>
-      Token(type, operator.offset, operator.precedingComments)
+  static Token _period(Token operator) =>
+      Token(TokenType.PERIOD, operator.offset, operator.precedingComments)
         ..previous = operator.previous
         ..next = operator.next;
 
@@ -1272,7 +1279,7 @@ class SourceVisitor extends ThrowingAstVisitor {
           _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
           // If we've reached the end, replace the `..` operator with `.`
           expressionTarget == cascadeTarget
-              ? _synthesizeToken(TokenType.PERIOD, expression.operator)
+              ? _period(expression.operator)
               : expression.operator,
           expression.propertyName);
     } else if (expression is MethodInvocation) {
@@ -1280,28 +1287,17 @@ class SourceVisitor extends ThrowingAstVisitor {
           _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
           // If we've reached the end, replace the `..` operator with `.`
           expressionTarget == cascadeTarget
-              ? _synthesizeToken(TokenType.PERIOD, expression.operator)
+              ? _period(expression.operator)
               : expression.operator,
           expression.methodName,
           expression.typeArguments,
           expression.argumentList);
     } else if (expression is IndexExpression) {
-      var question = expression.question;
-
-      // A null-aware cascade treats the `?` in `?..` as part of the token, but
-      // for a non-cascade index, it is a separate `?` token.
-      if (expression.period != null &&
-          expression.period.type == TokenType.QUESTION_PERIOD_PERIOD) {
-        question = _synthesizeToken(TokenType.QUESTION, expression.period);
-      }
-
-      return astFactory.indexExpressionForTarget2(
-          target: _insertCascadeTargetIntoExpression(
-              expressionTarget, cascadeTarget),
-          question: question,
-          leftBracket: expression.leftBracket,
-          index: expression.index,
-          rightBracket: expression.rightBracket);
+      return astFactory.indexExpressionForTarget(
+          _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
+          expression.leftBracket,
+          expression.index,
+          expression.rightBracket);
     }
     throw UnimplementedError('Unhandled ${expression.runtimeType}'
         '($expression)');
@@ -1501,7 +1497,10 @@ class SourceVisitor extends ThrowingAstVisitor {
   bool f(FormalParameterList node) {
     bool nonRequiredSeen = false;
     for (FormalParameter param in node.parameters.where((p) => p.isNamed)) {
-      if (param.metadata != null && param.metadata.isNotEmpty && param.metadata.any((metadata) => metadata.toString() == '@required')) {
+      if (param.metadata != null &&
+          param.metadata.isNotEmpty &&
+          param.metadata
+              .any((metadata) => metadata.toString() == '@required')) {
         if (nonRequiredSeen) {
           return true;
         }
@@ -1536,29 +1535,40 @@ class SourceVisitor extends ThrowingAstVisitor {
       ConstructorDeclaration constructorDeclaration = node.parent;
       //  - (node.parent as ConstructorDeclaration).childEntities
       int initializerLength = 0;
-      Iterable<int> initializerSegmentLengths = constructorDeclaration.initializers.map((i) => i.length);
+      Iterable<int> initializerSegmentLengths =
+          constructorDeclaration.initializers.map((i) => i.length);
       if (initializerSegmentLengths.isNotEmpty) {
-        initializerLength = initializerSegmentLengths.reduce((i, j) => i + j) + constructorDeclaration.initializers.length * 2;
+        initializerLength = initializerSegmentLengths.reduce((i, j) => i + j) +
+            constructorDeclaration.initializers.length * 2;
       }
 
-      lineLength = constructorDeclaration.length - initializerLength - constructorDeclaration.body.length - 1 + builder.indentation;
-    } else if (node.parent is FunctionExpression && node.parent.parent is FunctionDeclaration) {
+      lineLength = constructorDeclaration.length -
+          initializerLength -
+          constructorDeclaration.body.length -
+          1 +
+          builder.indentation;
+    } else if (node.parent is FunctionExpression &&
+        node.parent.parent is FunctionDeclaration) {
       // print('nah');
       // + 1 fpr {
       FunctionExpression expression = node.parent;
       FunctionDeclaration declaration = node.parent.parent;
 
       int metadataLength = 0;
-      Iterable<int> metadataSegmentLengths = declaration.metadata.map((i) => i.length);
+      Iterable<int> metadataSegmentLengths =
+          declaration.metadata.map((i) => i.length);
       if (metadataSegmentLengths.isNotEmpty) {
         metadataLength = metadataSegmentLengths.reduce((i, j) => i + j);
       }
 
       // print(':: $node');
 
-      lineLength = declaration.length - expression.childEntities.last.length - (declaration.documentationComment?.length ?? 0) - metadataLength + builder.indentation + 1;
-    } else {
-      print(node.parent.runtimeType);
+      lineLength = declaration.length -
+          expression.childEntities.last.length -
+          (declaration.documentationComment?.length ?? 0) -
+          metadataLength +
+          builder.indentation +
+          1;
     }
 
     if (['([', '({'].any(node.toString().startsWith)) {
@@ -1566,7 +1576,8 @@ class SourceVisitor extends ThrowingAstVisitor {
       // print('no');
     }
 
-    bool shouldFixCommas = _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
+    bool shouldFixCommas =
+        _formatter.fixes.contains(StyleFix.preferTrailingParameterListComma);
 
     if (shouldFixCommas && lineLength > builder.pageWidth) {
       // print('Formal param $node ${node.toString().startsWith('([')}');
@@ -1577,7 +1588,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     // If the parameter list has a trailing comma, format it like a collection
     // literal where each parameter goes on its own line, they are indented +2,
     // and the ")" ends up on its own line.
-    if (hasCommaAfter(node.parameters.last) || (shouldFixCommas && lineLength > builder.pageWidth)) {
+    if (hasCommaAfter(node.parameters.last) ||
+        (shouldFixCommas && lineLength > builder.pageWidth)) {
       _visitTrailingCommaParameterList(node, forceComma: shouldFixCommas);
       return;
     }
@@ -1639,20 +1651,25 @@ class SourceVisitor extends ThrowingAstVisitor {
       token(node.leftDelimiter);
 
       if (_formatter.fixes.contains(StyleFix.requiredFirst)) {
-        final sortedParams = optionalParams.toList()..sort((i, j) {
-          bool isFirstRequired = i.metadata != null && i.metadata.isNotEmpty && i.metadata.first.toString() == '@required';
-          bool isSecondRequired = j.metadata != null && j.metadata.isNotEmpty && j.metadata.first.toString() == '@required';
+        final sortedParams = optionalParams.toList()
+          ..sort((i, j) {
+            bool isFirstRequired = i.metadata != null &&
+                i.metadata.isNotEmpty &&
+                i.metadata.first.toString() == '@required';
+            bool isSecondRequired = j.metadata != null &&
+                j.metadata.isNotEmpty &&
+                j.metadata.first.toString() == '@required';
 
-          if (isFirstRequired && !isSecondRequired) return -1;
-          if (!isFirstRequired && isSecondRequired) return 1;
-          return 0;
-        });
+            if (isFirstRequired && !isSecondRequired) return -1;
+            if (!isFirstRequired && isSecondRequired) return 1;
+            return 0;
+          });
 
-        print(optionalParams);
+        // print(optionalParams);
 
         for (var param in sortedParams) {
           visit(param);
-          if (param != sortedParams.last){
+          if (param != sortedParams.last) {
             _writeCommaAfter(param, forceComma: true);
           } else {
             _writeCommaAfter(optionalParams.last);
@@ -1723,11 +1740,6 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     if (!isSpreadBody) builder.endBlockArgumentNesting();
     builder.unnest();
-
-    // If a control flow element is nested inside another, force the outer one
-    // to split.
-    if (_isControlFlowElement(node.body)) builder.forceRules();
-
     builder.endRule();
   }
 
@@ -1864,8 +1876,11 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   bool _shouldAddParensToFunctionExpression(FunctionExpression node) {
-    if (node.parent is AssignmentExpression && node.parent.parent is CascadeExpression) {
-      if (!'$node'.startsWith('((') && (node.body.childEntities.first is Token) && (node.body.childEntities.first as Token).lexeme == '=>') {
+    if (node.parent is AssignmentExpression &&
+        node.parent.parent is CascadeExpression) {
+      if (!'$node'.startsWith('((') &&
+          (node.body.childEntities.first is Token) &&
+          (node.body.childEntities.first as Token).lexeme == '=>') {
         return true;
       }
     }
@@ -1876,7 +1891,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   @override
   void visitFunctionExpression(FunctionExpression node) {
     bool shouldAddParens = _shouldAddParensToFunctionExpression(node);
-    
+
     if (_formatter.fixes.contains(StyleFix.sortProps) && shouldAddParens) {
       _writeStringLiteral(Token(TokenType.OPEN_PAREN, 0));
     }
@@ -2054,6 +2069,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       beforeBlock(elseSpreadBracket, spreadRule, null);
     }
 
+    @override
     void visitChild(CollectionElement element, CollectionElement child) {
       builder.nestExpression(indent: 2, now: true);
 
@@ -2078,9 +2094,8 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // Wrap the whole thing in a single rule. If a split happens inside the
     // condition or the then clause, we want the then and else clauses to split.
-    builder.startLazyRule();
+    builder.startRule();
 
-    var hasInnerControlFlow = false;
     for (var element in ifElements) {
       // The condition.
       token(element.ifKeyword);
@@ -2090,9 +2105,6 @@ class SourceVisitor extends ThrowingAstVisitor {
       token(element.rightParenthesis);
 
       visitChild(element, element.thenElement);
-      if (_isControlFlowElement(element.thenElement)) {
-        hasInnerControlFlow = true;
-      }
 
       // Handle this element's "else" keyword and prepare to write the element,
       // but don't write it. It will either be the next element in [ifElements]
@@ -2114,17 +2126,8 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // Handle the final trailing else if there is one.
     var lastElse = ifElements.last.elseElement;
-    if (lastElse != null) {
-      visitChild(lastElse, lastElse);
+    if (lastElse != null) visitChild(lastElse, lastElse);
 
-      if (_isControlFlowElement(lastElse)) {
-        hasInnerControlFlow = true;
-      }
-    }
-
-    // If a control flow element is nested inside another, force the outer one
-    // to split.
-    if (hasInnerControlFlow) builder.forceRules();
     builder.endRule();
   }
 
@@ -2340,7 +2343,6 @@ class SourceVisitor extends ThrowingAstVisitor {
     }
 
     builder.startSpan(Cost.index);
-    token(node.question);
     token(node.leftBracket);
     soloZeroSplit();
     visit(node.index);
@@ -2419,7 +2421,8 @@ class SourceVisitor extends ThrowingAstVisitor {
       bool shouldReplaceDoubleQuotes = !parent.isSingleQuoted &&
           !parent.elements.whereType<InterpolationString>().any((element) {
             return element.contents.lexeme.contains(newQuote);
-          }) && (parent.elements.first == node || parent.elements.last == node);
+          }) &&
+          (parent.elements.first == node || parent.elements.last == node);
 
       // print('$node $shouldReplaceDoubleQuotes');
 
@@ -2502,10 +2505,13 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    final stringified = node.argumentList.arguments.isNotEmpty ? node.argumentList.arguments.first.toString() : '';
+    final stringified = node.argumentList.arguments.isNotEmpty
+        ? node.argumentList.arguments.first.toString()
+        : '';
 
     // prefer_iterable_whereType
-    if (_formatter.fixes.contains(StyleFix.preferWhereType) && isIncorrectEmpty(node)) {
+    if (_formatter.fixes.contains(StyleFix.preferWhereType) &&
+        isIncorrectEmpty(node)) {
       // Try to keep the entire method invocation one line.
       builder.nestExpression();
       builder.startSpan();
@@ -2532,7 +2538,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       // list looks kind of strange. If this ends up happening in real world
       // code, consider putting a constraint between them.
       builder.nestExpression();
-      
+
       final val = stringified.split('is ');
       _writeText('<${val[1]}>()', 0);
       builder.unnest();
@@ -2715,7 +2721,8 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   @override
   void visitParenthesizedExpression(ParenthesizedExpression node) {
-    if (_formatter.fixes.contains(StyleFix.unnecessaryParenthesis) && !_areParenthesisNecessary(node)) {
+    if (_formatter.fixes.contains(StyleFix.unnecessaryParenthesis) &&
+        !_areParenthesisNecessary(node)) {
       builder.nestExpression();
       visit(node.expression);
       builder.unnest();
@@ -2935,7 +2942,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     // come at the top of the file, we don't have to worry about preceding
     // comments or whitespace.
     _writeText(node.scriptTag.lexeme.trim(), node.offset);
-    twoNewlines();
+    newline();
   }
 
   @override
@@ -3146,7 +3153,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   @override
   void visitTypeName(TypeName node) {
     if (_formatter.fixes.contains(StyleFix.preferVoidToNull) && _isNull(node)) {
-      if ((node.typeArguments?.arguments?.isNotEmpty ?? false) && node.typeArguments.arguments.first.toString().contains('Null')) {
+      if ((node.typeArguments?.arguments?.isNotEmpty ?? false) &&
+          node.typeArguments.arguments.first.toString().contains('Null')) {
         visit(node.name);
         _writeText('<', 0);
         final s = (node.typeArguments?.arguments ?? []).map((i) {
@@ -3238,8 +3246,12 @@ class SourceVisitor extends ThrowingAstVisitor {
     var hasMultipleVariables =
         (node.parent as VariableDeclarationList).variables.length > 1;
 
-    if (!_formatter.fixes.contains(StyleFix.nullInit) || node.isConst || node.isFinal || !DartTypeUtilities.isNullLiteral(node.initializer)) {
-      _visitAssignment(node.equals, node.initializer, nest: hasMultipleVariables);
+    if (!_formatter.fixes.contains(StyleFix.nullInit) ||
+        node.isConst ||
+        node.isFinal ||
+        !DartTypeUtilities.isNullLiteral(node.initializer)) {
+      _visitAssignment(node.equals, node.initializer,
+          nest: hasMultipleVariables);
     }
   }
 
@@ -3263,16 +3275,9 @@ class SourceVisitor extends ThrowingAstVisitor {
     // possible, we split after *every* declaration so that each is on its own
     // line.
     builder.startRule();
-
-    // If there are multiple declarations split across lines, then we want any
-    // blocks in the initializers to indent past the variables.
-    if (node.variables.length > 1) builder.startBlockArgumentNesting();
-
     visitCommaSeparatedNodes(node.variables, between: split);
-
-    if (node.variables.length > 1) builder.endBlockArgumentNesting();
-
     builder.endRule();
+
     _endPossibleConstContext(node.keyword);
   }
 
@@ -3756,7 +3761,8 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// We don't reuse [_visitCollectionLiteral] here because there are enough
   /// weird differences around optional parameters that it's easiest just to
   /// give them their own method.
-  void _visitTrailingCommaParameterList(FormalParameterList parameters, {bool forceComma = false}) {
+  void _visitTrailingCommaParameterList(FormalParameterList parameters,
+      {bool forceComma = false}) {
     // Can't have a trailing comma if there are no parameters.
     assert(parameters.parameters.isNotEmpty);
 
@@ -3789,11 +3795,17 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     if (_formatter.fixes.contains(StyleFix.requiredFirst)) {
       params.sort((i, j) {
-        if (i is! DefaultFormalParameter && j is DefaultFormalParameter) return -1;
-        if (i is DefaultFormalParameter && j is! DefaultFormalParameter) return 1;
+        if (i is! DefaultFormalParameter && j is DefaultFormalParameter)
+          return -1;
+        if (i is DefaultFormalParameter && j is! DefaultFormalParameter)
+          return 1;
 
-        bool isFirstRequired = i.metadata != null && i.metadata.isNotEmpty && i.metadata.first.toString() == '@required';
-        bool isSecondRequired = j.metadata != null && j.metadata.isNotEmpty && j.metadata.first.toString() == '@required';
+        bool isFirstRequired = i.metadata != null &&
+            i.metadata.isNotEmpty &&
+            i.metadata.first.toString() == '@required';
+        bool isSecondRequired = j.metadata != null &&
+            j.metadata.isNotEmpty &&
+            j.metadata.first.toString() == '@required';
 
         if (isFirstRequired && !isSecondRequired) return -1;
         if (!isFirstRequired && isSecondRequired) return 1;
@@ -4170,8 +4182,10 @@ class SourceVisitor extends ThrowingAstVisitor {
     var lines = string.lexeme.split(_formatter.lineEnding);
     var offset = string.offset;
 
-    bool isStartMultiline = lines.first.startsWith("'''") || lines.first.startsWith('"""');
-    bool isEndMultiline = lines.last.endsWith("'''") || lines.last.endsWith('"""');
+    bool isStartMultiline =
+        lines.first.startsWith("'''") || lines.first.startsWith('"""');
+    bool isEndMultiline =
+        lines.last.endsWith("'''") || lines.last.endsWith('"""');
 
     if (isStartMultiline || isEndMultiline) {
       _writeText(
@@ -4192,7 +4206,11 @@ class SourceVisitor extends ThrowingAstVisitor {
         builder.writeWhitespace(Whitespace.newlineFlushLeft);
         offset++;
         _writeText(
-            shouldReplaceDoubleQuotes && isEndMultiline ? lines.last.replaceRange(lines.last.length - 3, lines.last.length, "'''") : lines.last, offset);
+            shouldReplaceDoubleQuotes && isEndMultiline
+                ? lines.last.replaceRange(
+                    lines.last.length - 3, lines.last.length, "'''")
+                : lines.last,
+            offset);
         offset += lines.last.length;
       }
     } else {
@@ -4200,7 +4218,9 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       if (output.startsWith('"')) output = output.replaceRange(0, 1, "'");
       if (output.startsWith('r"')) output = output.replaceRange(1, 2, "'");
-      if (output.endsWith('"')) output = output.replaceRange(lines.first.length - 1, lines.first.length, "'");
+      if (output.endsWith('"'))
+        output = output.replaceRange(
+            lines.first.length - 1, lines.first.length, "'");
 
       _writeText(shouldReplaceDoubleQuotes ? output : lines.first, offset);
       offset += lines.first.length;
@@ -4228,7 +4248,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (forceComma) {
       return Token(TokenType.COMMA, 0);
     }
-    
+
     if (node.endToken.next.type == TokenType.COMMA) {
       return node.endToken.next;
     }

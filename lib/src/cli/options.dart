@@ -52,11 +52,6 @@ void defineOptions(ArgParser parser, {bool oldCli = false}) {
           'none': 'No summary.'
         },
         defaultsTo: 'line');
-    parser.addOption('package-name',
-        help:
-            'The name of the package. Used to be able to sort imports with a package section.'
-            'The sort fix will not consider packages if not supplied.',
-        defaultsTo: null);
   }
 
   parser.addSeparator('Non-whitespace fixes (off by default):');
@@ -95,6 +90,11 @@ void defineOptions(ArgParser parser, {bool oldCli = false}) {
       help: 'Selection to preserve formatted as "start:length".');
   parser.addOption('stdin-name',
       help: 'The path name to show when an error occurs.', defaultsTo: 'stdin');
+  parser.addOption('package-name',
+      help:
+          'The name of the package. Used to be able to sort imports with a package section.'
+          'The sort fix will not consider packages if not supplied.',
+      defaultsTo: null);
 
   if (oldCli) {
     parser.addFlag('profile', negatable: false, hide: true);

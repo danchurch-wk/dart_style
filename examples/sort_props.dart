@@ -8,32 +8,35 @@ class CascadesForDays {
   String e() => 'five';
   String get f => 'two';
   set g(String r) {}
+
+  Function foo;
 }
 
 void main() {
   CascadesForDays()
-    ..f
     ..g = ''
+    ..f
     ..e()
-    ..a = 5
     // A very interesting comment about `c`
     ..c = ''
+    ..a = 5
     ..b()
     ..d = (CascadesForDays()
       ..e()
-      ..a = 5
       // This line really needs
       // two lines of comments
       ..d = (CascadesForDays()
-        ..f
         ..g = ''
+        ..f
         ..e()
-        ..c = ''
         ..d = Object()
+        ..a // EOL comment
         ..b()
-        ..a = 5)
+        ..g = ''
+        ..foo = () => null)
       ..f
       ..b()
       ..c = ''
-      ..g = '');
+      ..g = ''
+      ..a = 5);
 }
